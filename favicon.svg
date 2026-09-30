@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded Background -->
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bgGrad)" />
+
+  <!-- Scanner Frame Corner Brackets -->
+  <path d="M14 21 V16 H19" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.9" />
+  <path d="M45 16 H50 V21" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.9" />
+  <path d="M14 43 V48 H19" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.9" />
+  <path d="M45 48 H50 V43" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.9" />
+
+  <!-- Package / Part Box Icon -->
+  <g fill="none" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32 20 L43 26 L32 32 L21 26 Z" fill="#ffffff" fill-opacity="0.25" />
+    <path d="M21 26 V37 L32 43 V32 Z" />
+    <path d="M43 26 V37 L32 43" />
+  </g>
+
+  <!-- Bright Orange Laser Scan Beam -->
+  <line x1="11" y1="32" x2="53" y2="32" stroke="#f59e0b" stroke-width="3" stroke-linecap="round" />
+</svg>
