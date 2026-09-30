@@ -148,6 +148,8 @@ const DOM = {
   // Navigation Badges
   navPendingBadge: document.getElementById('nav-pending-badge'),
   navNotifBadge: document.getElementById('nav-notif-badge'),
+  navPartBadge: document.getElementById('nav-part-badge'),
+  navTagihanBadge: document.getElementById('nav-tagihan-badge'),
 
   // Sheets View Containers & Controls
   btnRefreshPending: document.getElementById('btn-refresh-pending'),
@@ -280,28 +282,32 @@ function checkLoginSession() {
       const parsed = JSON.parse(session);
       if (parsed.isLoggedIn && parsed.nik) {
         state.isLoggedIn = true;
-        state.isAdmin = (parsed.nik.toUpperCase() === 'ADMIN' || !!parsed.isAdmin);
-        if (state.isAdmin) {
+        state.isAdmin = !!parsed.isAdmin;
+
+        const storedProfile = localStorage.getItem(STORAGE_KEYS.PROFILE);
+        if (storedProfile) {
+          try {
+            const parsedProfile = JSON.parse(storedProfile);
+            if (parsedProfile && parsedProfile.nik) {
+              state.profile = parsedProfile;
+            }
+          } catch (e) {}
+        }
+
+        if (!state.profile || !state.profile.nik) {
+          const nikUp = parsed.nik.toUpperCase().trim();
+          const isSiteCode = SITE_CODES.includes(nikUp);
           state.profile = {
-            id: 'admin-id',
-            nik: 'ADMIN',
-            nama: 'Administrator',
-            psw: '000',
+            id: parsed.nik,
+            nik: parsed.nik,
+            nama: parsed.nama || (nikUp === 'ADMIN' ? 'Administrator' : (isSiteCode ? `Admin ${parsed.nik}` : parsed.nama || parsed.nik)),
+            psw: parsed.nik,
+            area: isSiteCode ? nikUp : 'JABAR',
             usePsw: true
           };
-          updateUIFromState();
-        } else {
-          const storedProfile = localStorage.getItem(STORAGE_KEYS.PROFILE);
-          if (storedProfile) {
-            try {
-              const parsedProfile = JSON.parse(storedProfile);
-              if (parsedProfile && parsedProfile.nama) {
-                state.profile = parsedProfile;
-              }
-            } catch (e) {}
-          }
-          updateUIFromState();
         }
+
+        updateUIFromState();
         showAppScreen();
         return;
       }
@@ -788,6 +794,12 @@ async function executeClearAppCache() {
   try {
     showToast('🧹 Membersihkan cache data...', 'info');
 
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('google_sheets_cache') || key.startsWith(STORAGE_KEYS.SHEETS_CACHE))) {
+        localStorage.removeItem(key);
+      }
+    }
     localStorage.removeItem(STORAGE_KEYS.SHEETS_CACHE);
     localStorage.removeItem(STORAGE_KEYS.PIPO_CACHE);
     localStorage.removeItem(STORAGE_KEYS.FINISH_SHEET_CACHE);
@@ -827,6 +839,7 @@ async function fetchGoogleSheetsUsers() {
     const table = await fetchGVizSheetCustom(USER_SPREADSHEET_ID, 'user');
     const rows = extractMatrixFromGViz(table);
     const users = [];
+    state.userAreaMap = {};
 
     for (let r = 0; r < rows.length; r++) {
       const row = rows[r];
@@ -835,7 +848,7 @@ async function fetchGoogleSheetsUsers() {
       const nik = cleanNumberString(row[0]);
       const nama = (row[1] || '').trim();
       const psw = cleanNumberString(row[2]);
-      const area = (row[3] || '').trim(); // Column D: SITE / AREA
+      const area = (row[3] || '').trim().toUpperCase(); // Column D: SITE / AREA
 
       if (nik.toUpperCase() === 'NIK' && psw.toUpperCase() === 'PSW') continue;
 
@@ -846,6 +859,8 @@ async function fetchGoogleSheetsUsers() {
           psw: psw,
           area: area || 'JABAR'
         });
+        if (nama) state.userAreaMap[cleanNameString(nama)] = area || 'JABAR';
+        if (nik) state.userAreaMap[cleanNameString(nik)] = area || 'JABAR';
       }
     }
     return users;
@@ -857,9 +872,10 @@ async function fetchGoogleSheetsUsers() {
 
 async function syncUserProfileAreaFromSheet() {
   if (!state.isLoggedIn || !state.profile) return;
-  if (state.profile.nik && state.profile.nik.toUpperCase() === 'ADMIN') {
-    state.profile.area = 'JABAR';
-    if (DOM.profileArea) DOM.profileArea.value = 'JABAR';
+  const SITE_CODES = ['BDG', 'BDU', 'CRB', 'SKB', 'SBN', 'TSM'];
+  const nikUpper = (state.profile.nik || '').toUpperCase().trim();
+  if (nikUpper === 'ADMIN' || SITE_CODES.includes(nikUpper)) {
+    if (DOM.profileArea && SITE_CODES.includes(nikUpper)) DOM.profileArea.value = nikUpper;
     return;
   }
   try {
@@ -906,19 +922,31 @@ async function handleLogin() {
 
   try {
     let authenticatedUser = null;
-    const uUpper = username.toUpperCase();
+    const uUpper = username.toUpperCase().trim();
+    const SITE_CODES = ['BDG', 'BDU', 'CRB', 'SKB', 'SBN', 'TSM'];
 
-    // Default fallback for Admin
+    // 1. Global Admin Fallback
     if (uUpper === 'ADMIN' && password === '000') {
       authenticatedUser = {
         nik: 'ADMIN',
         nama: 'Administrator',
         psw: '000',
         area: 'JABAR',
-        isAdmin: true
+        isAdmin: true,
+        isSiteAdmin: false
+      };
+    } else if (SITE_CODES.includes(uUpper) && (password === '000' || password === uUpper)) {
+      // 2. Direct Site Admin Fallback (e.g. Username BDG, Password 000 or BDG)
+      authenticatedUser = {
+        nik: uUpper,
+        nama: 'Admin ' + uUpper,
+        psw: password,
+        area: uUpper,
+        isAdmin: true,
+        isSiteAdmin: true
       };
     } else {
-      // Fetch user list from Google Sheet tab 'user'
+      // 3. Fetch user list from Google Sheet tab 'user'
       const usersList = await fetchGoogleSheetsUsers();
       const matchedUser = usersList.find(u => {
         const nikClean = cleanNumberString(u.nik).toUpperCase();
@@ -935,12 +963,21 @@ async function handleLogin() {
         throw new Error('NIK/Nama atau Password tidak cocok!');
       }
 
+      const matchedNikUpper = cleanNumberString(matchedUser.nik).toUpperCase().trim();
+      const uUpperClean = uUpper.toUpperCase().trim();
+
+      // ONLY set isSiteAdmin if NIK itself (or login username) is one of SITE_CODES!
+      const isSiteAdmin = SITE_CODES.includes(matchedNikUpper) || SITE_CODES.includes(uUpperClean);
+      const isGlobalAdmin = matchedNikUpper === 'ADMIN' || uUpperClean === 'ADMIN';
+      const isAdminUser = isGlobalAdmin || isSiteAdmin;
+
       authenticatedUser = {
         nik: matchedUser.nik,
         nama: matchedUser.nama,
         psw: matchedUser.psw,
-        area: matchedUser.area || 'JABAR',
-        isAdmin: (matchedUser.nik.toUpperCase() === 'ADMIN')
+        area: isSiteAdmin ? (SITE_CODES.includes(matchedNikUpper) ? matchedNikUpper : uUpperClean) : (matchedUser.area || 'JABAR'),
+        isAdmin: isAdminUser,
+        isSiteAdmin: isSiteAdmin
       };
     }
 
@@ -1206,48 +1243,38 @@ function fallbackCopyText(text, label) {
 }
 
 async function fetchGVizSheetCustom(sheetId, sheetName) {
-  try {
-    return await new Promise((resolve, reject) => {
-      const callbackName = 'gviz_cb_' + Math.floor(Math.random() * 1000000);
-      const timeout = setTimeout(() => {
-        if (window[callbackName]) delete window[callbackName];
-        const el = document.getElementById(callbackName);
-        if (el) el.remove();
-        reject(new Error(`Timeout fetching sheet ${sheetName}`));
-      }, 10000);
+  return new Promise((resolve, reject) => {
+    const callbackName = 'gviz_cb_' + Math.floor(Math.random() * 1000000);
+    const timeout = setTimeout(() => {
+      if (window[callbackName]) delete window[callbackName];
+      const el = document.getElementById(callbackName);
+      if (el) el.remove();
+      reject(new Error(`Timeout fetching sheet ${sheetName}`));
+    }, 10000);
 
-      window[callbackName] = function(response) {
-        clearTimeout(timeout);
-        delete window[callbackName];
-        const el = document.getElementById(callbackName);
-        if (el) el.remove();
-        if (response && response.table) {
-          resolve(response.table);
-        } else {
-          reject(new Error(`Response table invalid for sheet ${sheetName}`));
-        }
-      };
+    window[callbackName] = function(response) {
+      clearTimeout(timeout);
+      delete window[callbackName];
+      const el = document.getElementById(callbackName);
+      if (el) el.remove();
+      if (response && response.table) {
+        resolve(response.table);
+      } else {
+        reject(new Error(`Response table invalid for sheet ${sheetName}`));
+      }
+    };
 
-      const script = document.createElement('script');
-      script.id = callbackName;
-      script.src = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=responseHandler:${callbackName}&sheet=${encodeURIComponent(sheetName)}&t=${Date.now()}`;
-      script.onerror = function(err) {
-        clearTimeout(timeout);
-        if (window[callbackName]) delete window[callbackName];
-        script.remove();
-        reject(err);
-      };
-      document.body.appendChild(script);
-    });
-  } catch (jsonpErr) {
-    const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}&t=${Date.now()}`;
-    const res = await fetch(url);
-    const text = await res.text();
-    const jsonMatch = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?/);
-    if (!jsonMatch) throw new Error(`Format respon Google Sheet ${sheetName} tidak valid`);
-    const parsed = JSON.parse(jsonMatch[1]);
-    return parsed.table;
-  }
+    const script = document.createElement('script');
+    script.id = callbackName;
+    script.src = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=responseHandler:${callbackName}&sheet=${encodeURIComponent(sheetName)}&t=${Date.now()}`;
+    script.onerror = function(err) {
+      clearTimeout(timeout);
+      if (window[callbackName]) delete window[callbackName];
+      script.remove();
+      reject(err);
+    };
+    document.body.appendChild(script);
+  });
 }
 
 function loadPipoCache() {
@@ -1524,7 +1551,7 @@ function renderPipoTab() {
 }
 
 const GOOGLE_FORM_FINISH_URL = '';
-const APPS_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyg2nMUkFC9GPYPrwqP2hzYuuU7_l4wNSC3_mfAJgOtjmD-piOWRludX_tzmYbTiIaX-Q/exec';
+var APPS_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwaDyJgzNp7OfhMWDORfGdwyuMVjgamTULd_ulfsw16xWsGXCo2mKA12-5TPY_PagcA1A/exec';
 
 
 const VALID_FORM_TECHNICIANS = [
@@ -1570,7 +1597,7 @@ function prepareFinishForm() {
 
     // Deduplicate case-insensitively
     const seen = new Set();
-    const choices = [];
+    let choices = [];
     rawList.forEach(name => {
       const normalized = name.trim().toLowerCase();
       if (!seen.has(normalized)) {
@@ -1578,6 +1605,19 @@ function prepareFinishForm() {
         choices.push(name.trim());
       }
     });
+
+    // If logged in as Site Admin, filter options to ONLY technicians matching site role
+    if (state.isLoggedIn && state.profile) {
+      const nikUpper = (state.profile.nik || '').toUpperCase().trim();
+      const userAreaUpper = (state.profile.area || '').toUpperCase().trim();
+      const isSiteAdmin = SITE_CODES.includes(nikUpper) || (state.isAdmin && SITE_CODES.includes(userAreaUpper)) || !!state.isSiteAdmin;
+      if (isSiteAdmin && nikUpper !== 'ADMIN') {
+        const filteredChoices = choices.filter(name => isMatchForCurrentRole(name));
+        if (filteredChoices.length > 0) {
+          choices = filteredChoices;
+        }
+      }
+    }
 
     const currentSelected = DOM.finishNama.value;
     DOM.finishNama.innerHTML = choices.map(t =>
@@ -1735,11 +1775,11 @@ async function fetchFinishSheetData() {
             };
 
             // Filter according to user role / logged in user
-            if (state.isAdmin || matchTechName(rowNama, targetTechName, state.profile ? state.profile.nik : '')) {
+            if (isMatchForCurrentRole(rowNama)) {
               parsedAllRows.push(entryObj);
             }
 
-            if (targetTechName && isSameTechnicianName(rowNama, targetTechName)) {
+            if (isMatchForCurrentRole(rowNama)) {
               filledDatesSet.add(normTgl);
             }
           }
@@ -2234,14 +2274,63 @@ function isSameTechnicianName(sheetNama, targetNama) {
   return false;
 }
 
+const SITE_CODES = ['BDG', 'BDU', 'CRB', 'SKB', 'SBN', 'TSM'];
+
+function getTechnicianRegisteredArea(techName) {
+  if (!techName || !state.userAreaMap) return null;
+  const cTech = cleanNameString(techName);
+  if (!cTech) return null;
+
+  // 1. Direct key match
+  if (state.userAreaMap[cTech]) {
+    return state.userAreaMap[cTech];
+  }
+
+  // 2. Exact name matching against keys in userAreaMap
+  for (const [key, area] of Object.entries(state.userAreaMap)) {
+    if (key.length >= 3 && matchTechName(cTech, key)) {
+      return area;
+    }
+  }
+
+  return null;
+}
+
+function isMatchForCurrentRole(techName, rowArea = '') {
+  if (!state.isLoggedIn || !state.profile) return false;
+
+  const nikUpper = (state.profile.nik || '').toUpperCase().trim();
+  const userAreaUpper = (state.profile.area || '').toUpperCase().trim();
+
+  // 1. Global Admin (ADMIN / 000) sees EVERYTHING across all sites
+  if (nikUpper === 'ADMIN') return true;
+
+  // 2. Site Admin ONLY if NIK equals one of SITE_CODES (BDG, BDU, CRB, SKB, SBN, TSM)
+  const isSiteAdmin = SITE_CODES.includes(nikUpper) || !!state.isSiteAdmin;
+  if (isSiteAdmin) {
+    const siteCode = SITE_CODES.includes(nikUpper) ? nikUpper : userAreaUpper;
+
+    const registeredArea = getTechnicianRegisteredArea(techName);
+    if (registeredArea) {
+      return registeredArea.toUpperCase().trim() === siteCode;
+    }
+    if (rowArea && rowArea.toUpperCase().trim() === siteCode) return true;
+    if (techName && cleanNameString(techName) === siteCode.toLowerCase()) return true;
+
+    return false;
+  }
+
+  // 3. Normal Technician (Login using regular NIK / Username): sees ONLY their own data
+  return matchTechName(techName, state.profile.nama, state.profile.nik);
+}
+
 function matchTechName(sheetName, userName, userNik = '') {
   const uUpper = (userName || '').toUpperCase().trim();
   const nUpper = (userNik || '').toUpperCase().trim();
 
-  // If filter is empty ("") or user is admin (and not filtering for a specific technician name)
+  // If filter is empty ("") or user is global admin (and not filtering for a specific technician name)
   if (!uUpper && !nUpper) return true;
   if (uUpper === 'ADMIN' || nUpper === 'ADMIN') return true;
-  if (state.isAdmin && (uUpper === (state.profile.nama || '').toUpperCase().trim() || uUpper === (state.profile.nik || '').toUpperCase().trim())) return true;
 
   if (!sheetName) return false;
 
@@ -2354,7 +2443,7 @@ function saveSheetsCache() {
   }
 }
 
-async function fetchGVizSheet(sheetName, range = 'A1:Z1000', noHeaders = false) {
+async function fetchGVizSheet(sheetName, range = 'A1:BZ2000', noHeaders = false) {
   // Use JSONP dynamic script injection to bypass CORS policy restrictions completely
   return new Promise((resolve, reject) => {
     const callbackName = 'gviz_cb_' + Math.floor(Math.random() * 1000000);
@@ -2388,7 +2477,8 @@ async function fetchGVizSheet(sheetName, range = 'A1:Z1000', noHeaders = false) 
     const script = document.createElement('script');
     script.id = callbackName;
     const headersParam = noHeaders ? '&headers=0' : '';
-    script.src = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=responseHandler:${callbackName}&sheet=${encodeURIComponent(sheetName)}&range=${encodeURIComponent(range)}${headersParam}&t=${Date.now()}`;
+    const rangeParam = range ? `&range=${encodeURIComponent(range)}` : '&range=A1%3ABZ2000';
+    script.src = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=responseHandler:${callbackName}${rangeParam}${headersParam}&sheet=${encodeURIComponent(sheetName)}&t=${Date.now()}`;
     script.onerror = function(err) {
       clearTimeout(timeout);
       cleanup();
@@ -2440,37 +2530,23 @@ function parseCSVToMatrix(csvText) {
 }
 
 async function fetchSheetMatrix(sheetName, range = '') {
-  const spreadsheetId = GOOGLE_SHEET_ID;
-
-  // Strategy 0: If running on file:// protocol, directly use JSONP to prevent browser console CORS origin:null errors
-  if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
+  // Strategy 1: Apps Script Web App API (Always returns 100% evaluated live data with CORS access everywhere!)
+  if (typeof APPS_SCRIPT_WEB_APP_URL !== 'undefined' && APPS_SCRIPT_WEB_APP_URL && APPS_SCRIPT_WEB_APP_URL.trim() !== '') {
     try {
-      const table = await fetchGVizSheet(sheetName, range);
-      return extractMatrixFromGViz(table);
-    } catch (e) {
-      return [];
-    }
-  }
-
-  // Strategy 1: Direct CORS-enabled CSV fetch (for http/https origins)
-  try {
-    const rangeParam = range ? `&range=${encodeURIComponent(range)}` : '';
-    const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}${rangeParam}&t=${Date.now()}`;
-    const resp = await fetch(csvUrl, { mode: 'cors', headers: { 'Accept': 'text/csv' } });
-    if (resp.ok) {
-      const csvText = await resp.text();
-      const matrix = parseCSVToMatrix(csvText);
-      if (matrix && matrix.length > 0) {
-        return matrix;
+      const resp = await fetch(APPS_SCRIPT_WEB_APP_URL);
+      if (resp.ok) {
+        const json = await resp.json();
+        if (json && json.status === 'success') {
+          if (sheetName.toUpperCase() === 'DATA' && json.data && json.data.length > 0) return json.data;
+          if (sheetName.toUpperCase() === 'NOTIF' && json.notif && json.notif.length > 0) return json.notif;
+        }
       }
-    }
-  } catch (e) {
-    // Silent fallback to JSONP script injection
+    } catch (e) {}
   }
 
-  // Strategy 2: JSONP Script Injection Fallback
+  // Strategy 2: JSONP Script Injection Fallback (Bypasses CORS policy restrictions cleanly without console errors)
   try {
-    const table = await fetchGVizSheet(sheetName, range);
+    const table = await fetchGVizSheet(sheetName, range || 'A1:BZ2000');
     return extractMatrixFromGViz(table);
   } catch (e) {
     return [];
@@ -2484,7 +2560,7 @@ async function fetchGoogleSheetsData() {
   if (DOM.syncIcon) DOM.syncIcon.classList.add('spinning');
 
   try {
-    const rowsData = await fetchSheetMatrix('DATA');
+    const rowsData = await fetchSheetMatrix('DATA', 'A1:BZ2000');
     const rowsNotif = await fetchSheetMatrix('NOTIF').catch(() => []);
 
     const techName = state.profile.nama || '';
@@ -2492,164 +2568,171 @@ async function fetchGoogleSheetsData() {
 
     syncUserProfileAreaFromSheet();
 
-    // 0. Direct Cell Extraction for BC3 (Row 3/idx 2), BC4 (Row 4/idx 3), BC5 (Row 5/idx 4), BC6 (Row 6/idx 5)
-    function extractRawBC(rowIdx) {
-      if (rowsData && rowsData.length > rowIdx && rowsData[rowIdx] && rowsData[rowIdx][54] !== undefined && rowsData[rowIdx][54] !== null) {
-        const val = String(rowsData[rowIdx][54]).trim();
-        if (val) return val;
-      }
-      return '';
+    // 0. Direct Cell Extraction for Timestamp from Col AY (Index 50)
+    let pendingTimestamp = '';
+    if (rowsData && rowsData.length > 1 && rowsData[1] && rowsData[1][50]) {
+      pendingTimestamp = String(rowsData[1][50]).trim(); // Col AY (Index 50)
     }
+    if (!pendingTimestamp || !pendingTimestamp.includes('Update')) {
+      pendingTimestamp = 'Update Tanggal ' + new Date().toLocaleDateString('id-ID');
+    }
+    let performaTimestamp = pendingTimestamp;
+    let partKembaliTimestamp = pendingTimestamp;
+    let tagihanTimestamp = pendingTimestamp;
 
-    let pendingTimestamp = extractRawBC(2);     // BC3 (Pending)
-    let performaTimestamp = extractRawBC(3);    // BC4 (Performa)
-    let partKembaliTimestamp = extractRawBC(4); // BC5 (Part Bekas)
-    let tagihanTimestamp = extractRawBC(5) || extractRawBC(1); // BC6 / BC2 (Tagihan)
-
-    if (!pendingTimestamp) pendingTimestamp = 'Update Tanggal ' + new Date().toLocaleDateString('id-ID');
-    if (!performaTimestamp) performaTimestamp = pendingTimestamp;
-    if (!partKembaliTimestamp) partKembaliTimestamp = pendingTimestamp;
-    if (!tagihanTimestamp) tagihanTimestamp = pendingTimestamp;
-
-    // 1. Pending Cases (Sheet DATA, Row 3+, Col 53 to 65 / BB to BN)
+    // 1. Pending Cases (Sheet DATA, Row 1+, Col AZ to BH / Col Index 51 to 59)
     const pendingCases = [];
 
-    for (let r = 2; r < rowsData.length; r++) {
+    for (let r = 1; r < rowsData.length; r++) {
       const row = rowsData[r];
-      if (!row || row.length < 63) continue;
+      if (!row || row.length < 52) continue;
 
-      const rowTech = (row[62] || '').trim();  // BK: NAMA TEKNISI
-      const noCase = (row[64] || '').trim();   // BM: NO CASE
-      const tglCase = (row[65] || '').trim();  // BN: TGL CASE
-      const kategori = (row[55] || '').trim(); // BD: KATEGORI (WIP COMP, WIP, WIP TECH, NEW)
-      const unitType = (row[66] || row[58] || '').trim(); // BO: TYPE (Model/Type)
-      const snVal = (row[67] || row[63] || '').trim();    // BP: SN (Serial Number)
-      const noSclVal = (row[68] || '').trim(); // BQ: NO SCL
-      const area = (row[63] || '').trim();     // BL: AREA (BDG)
+      const statusVal = (row[51] || '').trim();  // AZ: STATUS (Col Index 51)
+      const usiaVal = (row[52] || '').trim();    // BA: REF / USIA (Col Index 52)
+      const rowTech = (row[53] || '').trim();    // BB: TEKNISI (Col Index 53)
+      const area = (row[54] || '').trim();       // BC: SITE (Col Index 54)
+      const noCase = (row[55] || '').trim();     // BD: NO CASE (Col Index 55)
+      const tglCase = (row[56] || '').trim();    // BE: TGL CASE (Col Index 56)
+      const unitType = (row[57] || '').trim();   // BF: TYPE (Col Index 57)
+      const snVal = (row[58] || '').trim();      // BG: SERI (Col Index 58)
+      const sclVal = (row[59] || '').trim();     // BH: SCL (Col Index 59)
 
       // Skip header row
-      if (rowTech.toUpperCase().includes('NAMA TEKNISI') || noCase.toUpperCase().includes('NO CASE')) continue;
+      if (statusVal.toUpperCase() === 'STATUS' || noCase.toUpperCase() === 'NO CASE') continue;
 
-      if ((noCase || kategori || noSclVal) && rowTech && matchTechName(rowTech, techName, techNik)) {
+      if ((noCase || statusVal) && isMatchForCurrentRole(rowTech, area)) {
         pendingCases.push({
-          tgl: tglCase || '-',
-          no_case: noCase || '-',
-          no_scl: noSclVal || '-', // BQ: NO SCL
-          type: unitType || '-',   // BO: TYPE
-          sn: snVal || '-',        // BP: SN
-          seri: snVal || area || '-',
-          layanan: unitType || 'SERVICE',
-          status: kategori || 'PENDING',  // BD: KATEGORI
-          teknisi: rowTech,               // BK: NAMA TEKNISI
-          ket_part: kategori,             // BD: KATEGORI
-          usia: ''
+          tgl: (tglCase && tglCase !== '0' && tglCase !== 'False') ? tglCase : '-',
+          no_case: (noCase && noCase !== '0') ? noCase : '-',
+          type: (unitType && unitType !== '0') ? unitType : '-',     // BF: TYPE
+          sn: (snVal && snVal !== '0') ? snVal : '-',                // BG: SERI
+          seri: (snVal && snVal !== '0') ? snVal : '-',              // BG: SERI
+          scl: (sclVal && sclVal !== '0') ? sclVal : '-',            // BH: SCL
+          no_scl: (sclVal && sclVal !== '0') ? sclVal : '-',         // BH: SCL
+          site: (area && area !== '0') ? area : '-',                 // BC: SITE
+          status: (statusVal && statusVal !== '0') ? statusVal : 'PENDING', // AZ: STATUS
+          teknisi: rowTech || '-',                                   // BB: TEKNISI
+          ket_part: statusVal,                                       // AZ: STATUS
+          usia: (usiaVal && usiaVal !== '0') ? cleanNumberString(usiaVal) : '' // BA: REF/USIA
         });
       }
     }
 
-    if (!pendingTimestamp) pendingTimestamp = 'Update Tanggal ' + new Date().toLocaleDateString('id-ID');
-
-    // 2. Part Bekas / Part Belum Kembali (Sheet DATA, Row 3+, Col 40 to 45 / AO to AT)
+    // 2. Part Bekas / Part Belum Kembali (Sheet DATA, Row 1+, Col AM to AS / Col Index 38 to 44)
     const partBelumKembali = [];
-    for (let r = 2; r < rowsData.length; r++) {
+    for (let r = 1; r < rowsData.length; r++) {
       const row = rowsData[r];
-      if (!row || row.length < 46) continue;
-      const noReservasi = (row[40] || '').trim(); // AO: Nomor Reservasi
-      const partNo = (row[41] || '').trim();      // AP: Part Number
-      const qtyVal = (row[42] || '').trim();      // AQ: Qty
-      const techNameRow = (row[45] || '').trim(); // AT: Teknisi Perbaikan
+      if (!row || row.length < 45) continue;
+      const siteAM = (row[38] || '').trim();      // AM: SITE (Col Index 38)
+      const noReservasi = (row[39] || '').trim(); // AN: NO RSV (Col Index 39)
+      const partNo = (row[40] || '').trim();      // AO: PART NUMBER (Col Index 40)
+      const qtyVal = (row[41] || '').trim();      // AP: QTY BELUM KEMBALI (Col Index 41)
+      const tglVal = (row[43] || '').trim();      // AR: TANGGAL (Col Index 43)
+      const techNameRow = (row[44] || '').trim(); // AS: TEKNISI (Col Index 44)
 
-      if (noReservasi.toUpperCase().includes('NOMOR RESERVASI') || partNo.toUpperCase().includes('COLUMN')) continue;
+      if (noReservasi.toUpperCase() === 'NO RSV' || partNo.toUpperCase() === 'PART' || techNameRow.toUpperCase() === 'TEKNISI') continue;
 
-      if ((partNo || noReservasi) && techNameRow && matchTechName(techNameRow, techName, techNik)) {
+      if ((partNo || noReservasi) && techNameRow && isMatchForCurrentRole(techNameRow, siteAM)) {
         partBelumKembali.push({
           noGudang: partNo || noReservasi,
           qty: qtyVal || '1',
+          tgl: (tglVal && tglVal !== '0' && tglVal !== 'False' && tglVal !== 'True') ? tglVal : '',
           teknisi: techNameRow,
           noReservasi: (noReservasi && noReservasi.toUpperCase() !== 'NONE') ? noReservasi : ''
         });
       }
     }
 
-    // 3. Tagihan (Sheet DATA, Row 3+, Col 46 to 52 / AU to BA)
+    // 3. Tagihan (Sheet DATA, Row 1+, Col AT to AX / Col Index 45 to 49)
     const tagihanRows = [];
-    for (let r = 2; r < rowsData.length; r++) {
+    for (let r = 1; r < rowsData.length; r++) {
       const row = rowsData[r];
-      if (!row || row.length < 51) continue;
-      const tglVal = (row[46] || '').trim();      // AU: Tanggal
-      const noInvoice = (row[47] || '').trim();   // AV: No. Svc Call / No. SO / No Invoice
-      const techNameRow = (row[48] || '').trim(); // AW: Nama Teknisi
-      const jumlahVal = (row[49] || '').trim();   // AX: Nominal / Jumlah
-      const namaKonsumenAY = (row[50] || '').trim();// AY: Nama Customer
-      const namaKonsumenBA = (row[52] || '').trim();// BA: Nama Customer dari Kolom BA (Col Index 52)
-      const marketVal = (row[51] || '').trim();   // AZ: Market
+      if (!row || row.length < 50) continue;
+      const siteAT = (row[45] || '').trim();      // AT: SITE / AREA (Col Index 45)
+      const noInvoice = (row[46] || '').trim();   // AU: NO INVOICE (Col Index 46)
+      const valAV = (row[47] || '').trim();       // AV: TEKNISI / ITEM (Col Index 47)
+      const valAW = (row[48] || '').trim();       // AW: TEKNISI / NOMINAL (Col Index 48)
+      const namaCustomer = (row[49] || '').trim();// AX: NAMA CUSTOMER (Col Index 49)
 
-      if (noInvoice.toUpperCase().includes('NO. SVC') || noInvoice.toUpperCase().includes('COLUMN')) continue;
+      if (noInvoice.toUpperCase() === 'NO INVOICE' || valAV.toUpperCase() === 'TEKNISI' || valAW.toUpperCase() === 'TEKNISI') continue;
 
-      let namaCustomer = (namaKonsumenBA && namaKonsumenBA !== 'B') ? namaKonsumenBA : namaKonsumenAY;
-      if (!namaCustomer) namaCustomer = '-';
+      // Smart detection: determine which column is Technician Name vs Nominal Amount
+      let techNameRow = valAW;
+      let jumlahVal = valAV;
 
-      if ((noInvoice || jumlahVal) && techNameRow && matchTechName(techNameRow, techName, techNik)) {
+      const awIsNumber = /^[0-9.,]+$/.test(valAW);
+      const avIsNumber = /^[0-9.,]+$/.test(valAV);
+
+      if (awIsNumber) {
+        jumlahVal = valAW;
+        techNameRow = valAV || valAW;
+      } else if (avIsNumber) {
+        jumlahVal = valAV;
+        techNameRow = valAW || valAV;
+      }
+
+      if ((noInvoice || jumlahVal) && techNameRow && isMatchForCurrentRole(techNameRow, siteAT)) {
         tagihanRows.push({
           noInvoice: noInvoice || 'INV-' + r,
           teknisi: techNameRow,
           jumlah: jumlahVal || '0',
-          namaKonsumen: namaCustomer,
-          market: marketVal || ''
+          namaKonsumen: namaCustomer || '-',
+          site: siteAT || '-'
         });
       }
     }
 
-    // 4. Performa / Output (Sheet DATA, Row 2+, Col 1 to 6 for unit counts, H3 to AL3 for daily output)
+    // 4. Performa / Output (Sheet DATA, Row 1+, Col A to F for totals, G to AK for daily output)
     const insentifRows = [];
     const outputHariIni = [];
 
-    // Dynamically match Today's Date column (Cols H to AL / index 7 to 37)
+    // Dynamically match Today's Date column (Cols G to AK / index 6 to 36)
     const todayDay = new Date().getDate();
     let todayColIdx = -1;
 
-    if (rowsData && rowsData.length > 1) {
-      for (let c = 7; c < Math.min(38, rowsData[1].length); c++) {
-        const val = (rowsData[1][c] || '').trim();
-        if (val === String(todayDay)) {
-          todayColIdx = c;
-          break;
+    if (rowsData && rowsData.length > 0) {
+      for (let c = 6; c <= 36; c++) {
+        if (rowsData[0] && rowsData[0][c]) {
+          const val = String(rowsData[0][c]).trim();
+          if (val === String(todayDay) || val === String(todayDay) + '.0') {
+            todayColIdx = c;
+            break;
+          }
         }
       }
     }
     if (todayColIdx === -1) {
-      todayColIdx = 6 + todayDay; // Fallback: Day 1 = Col 7 (H), Day 30 = Col 36 (AK)
+      todayColIdx = 5 + todayDay; // Fallback: Day 1 = Col 6 (G), Day 31 = Col 36 (AK)
     }
 
     for (let r = 1; r < rowsData.length; r++) {
       const row = rowsData[r];
       if (!row || row.length < 6) continue;
-      const techNameRow = (row[1] || '').trim(); // Col B: NAMA TEKNISI
+      const techNameRow = (row[0] || '').trim(); // Col A: NAMA TEKNISI (Index 0)
       if (!techNameRow || techNameRow.toUpperCase() === 'NAMA TEKNISI') continue;
 
-      if (matchTechName(techNameRow, techName, techNik)) {
-        const indoorCount = parseInt(row[2] || '0', 10) || 0;
-        const outdoorCount = parseInt(row[3] || '0', 10) || 0;
-        const acCount = parseInt(row[4] || '0', 10) || 0;
-        const evCount = parseInt(row[5] || '0', 10) || 0;
+      const indoorCount = parseInt(row[1] || '0', 10) || 0;
+      const outdoorCount = parseInt(row[2] || '0', 10) || 0;
+      const acCount = parseInt(row[3] || '0', 10) || 0;
+      const evCount = parseInt(row[4] || '0', 10) || 0;
 
-        // Output Hari Ini fetched specifically from Today's Date Column (H3=1 to AL3=31)
-        const todayOutputVal = (row[todayColIdx] !== undefined && row[todayColIdx] !== null) ? String(row[todayColIdx]).trim() : '0';
+      // Output Hari Ini fetched specifically from Today's Date Column
+      const todayOutputVal = (row[todayColIdx] !== undefined && row[todayColIdx] !== null) ? String(row[todayColIdx]).trim() : '0';
 
-        insentifRows.push({
-          nama: techNameRow,
-          indoor: indoorCount.toString(),
-          outdoor: outdoorCount.toString(),
-          ac: acCount.toString(),
-          ev: evCount.toString(),
-          total_output: (indoorCount + outdoorCount + acCount + evCount).toString()
-        });
+      insentifRows.push({
+        nama: techNameRow,
+        indoor: indoorCount.toString(),
+        outdoor: outdoorCount.toString(),
+        ac: acCount.toString(),
+        ev: evCount.toString(),
+        insentif: row[5] || '0',
+        total_output: (indoorCount + outdoorCount + acCount + evCount).toString()
+      });
 
-        outputHariIni.push({
-          nama: techNameRow,
-          total_output: todayOutputVal || '0'
-        });
-      }
+      outputHariIni.push({
+        nama: techNameRow,
+        total_output: todayOutputVal || '0'
+      });
     }
 
     // 5. Notifications (Sheet NOTIF, Cols A-J)
@@ -2658,7 +2741,7 @@ async function fetchGoogleSheetsData() {
       const row = rowsNotif[r];
       if (!row || row.length === 0) continue;
       const rowTech = row[6] || row[7] || '';
-      if (rowTech && matchTechName(rowTech, techName, techNik)) {
+      if (rowTech && isMatchForCurrentRole(rowTech)) {
         notifications.push({
           no_scl: row[0] || '',
           type: row[1] || '',
@@ -2755,6 +2838,8 @@ function renderSheetUpdateInfo() {
 function updateBadges() {
   const notifCount = state.sheetsData.notifications ? state.sheetsData.notifications.length : 0;
   const pendingCount = state.sheetsData.pendingCases ? state.sheetsData.pendingCases.length : 0;
+  const partCount = state.sheetsData.partBelumKembali ? state.sheetsData.partBelumKembali.length : 0;
+  const tagihanCount = state.sheetsData.tagihanRows ? state.sheetsData.tagihanRows.length : 0;
 
   if (DOM.headerBellBadge) {
     DOM.headerBellBadge.textContent = notifCount;
@@ -2768,9 +2853,19 @@ function updateBadges() {
     DOM.navPendingBadge.textContent = pendingCount;
     DOM.navPendingBadge.classList.toggle('hidden', pendingCount === 0);
   }
+  if (DOM.navPartBadge) {
+    DOM.navPartBadge.textContent = partCount;
+    DOM.navPartBadge.classList.toggle('hidden', partCount === 0);
+  }
+  if (DOM.navTagihanBadge) {
+    DOM.navTagihanBadge.textContent = tagihanCount;
+    DOM.navTagihanBadge.classList.toggle('hidden', tagihanCount === 0);
+  }
 
   if (DOM.pendingTechCount) DOM.pendingTechCount.textContent = `${pendingCount} Case`;
   if (DOM.notifTechCount) DOM.notifTechCount.textContent = `${notifCount} Notif`;
+  if (DOM.partKembaliCount) DOM.partKembaliCount.textContent = `${partCount} Item`;
+  if (DOM.tagihanCount) DOM.tagihanCount.textContent = `${tagihanCount} Invoice`;
 }
 
 function renderPendingTab() {
@@ -2809,30 +2904,38 @@ function renderPendingTab() {
     return `
       <div class="pending-card" style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:10px 12px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-          <div style="font-size:11px; font-weight:700; color:var(--text-main); display:flex; align-items:center; gap:6px; word-break:break-all;">
-            <i data-lucide="file-text" style="width:14px; height:14px; color:var(--primary); flex-shrink:0;"></i>
-            <span>${escapeHtml(item.no_case || item.no_scl || '-')}</span>
+          <div style="font-size:10px; font-weight:600; color:var(--text-main); display:flex; align-items:center; gap:5px; word-break:break-all;">
+            <i data-lucide="file-text" title="No Case" style="width:13px; height:13px; color:var(--primary); flex-shrink:0;"></i>
+            <span>${escapeHtml(item.no_case || '-')}</span>
           </div>
-          <span class="pending-status-badge ${statusClass}" style="flex-shrink:0; font-size:10.5px; padding:3px 8px; font-weight:700;">
+          <span class="pending-status-badge ${statusClass}" style="flex-shrink:0; font-size:10px; padding:2px 7px; font-weight:700;">
             ${escapeHtml(item.status || 'PENDING')}
           </span>
         </div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 8px; font-size:10.5px; color:var(--text-main); border-top:1px dashed var(--border-color); padding-top:6px;">
-          <div style="display:flex; align-items:center; gap:4px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 8px; font-size:10px; color:var(--text-main); border-top:1px dashed var(--border-color); padding-top:6px;">
+          <div style="display:flex; align-items:center; gap:4px;" title="Tanggal (BE)">
             <i data-lucide="calendar" style="width:12px; height:12px; color:var(--primary); flex-shrink:0;"></i>
             <span>${escapeHtml(item.tgl || '-')}</span>
           </div>
-          <div style="display:flex; align-items:center; gap:4px;">
+          <div style="display:flex; align-items:center; gap:4px;" title="Type Unit (BF)">
             <i data-lucide="cpu" style="width:12px; height:12px; color:var(--info, #3b82f6); flex-shrink:0;"></i>
-            <span>${escapeHtml(item.type || '-')}</span>
+            <span style="word-break:break-all;">${escapeHtml(item.type || '-')}</span>
           </div>
-          <div style="display:flex; align-items:center; gap:4px;">
+          <div style="display:flex; align-items:center; gap:4px;" title="No Seri (BG)">
             <i data-lucide="barcode" style="width:12px; height:12px; color:var(--warning); flex-shrink:0;"></i>
             <span style="word-break:break-all;">${escapeHtml(item.sn || item.seri || '-')}</span>
           </div>
-          <div style="display:flex; align-items:center; gap:4px;">
-            <i data-lucide="hash" style="width:12px; height:12px; color:var(--success, #10b981); flex-shrink:0;"></i>
-            <span style="word-break:break-all;">${escapeHtml(item.no_scl || '-')}</span>
+          <div style="display:flex; align-items:center; gap:4px;" title="SCL (BH)">
+            <i data-lucide="layers" style="width:11px; height:11px; color:var(--warning); flex-shrink:0;"></i>
+            <span style="word-break:break-all;">${escapeHtml(item.scl || item.no_scl || '-')}</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:4px;" title="Site (BC)">
+            <i data-lucide="map-pin" style="width:12px; height:12px; color:var(--primary); flex-shrink:0;"></i>
+            <span>${escapeHtml(item.site || '-')}</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:4px;" title="Teknisi (BB)">
+            <i data-lucide="user" style="width:12px; height:12px; color:var(--text-muted); flex-shrink:0;"></i>
+            <span style="word-break:break-all;">${escapeHtml(item.teknisi || '-')}</span>
           </div>
         </div>
       </div>`;
@@ -2876,26 +2979,34 @@ function formatRupiah(val) {
   return 'Rp ' + formatted;
 }
 
+function parseRupiahToNumber(val) {
+  if (val === undefined || val === null) return 0;
+  let str = String(val).trim();
+  if (!str || str === '-' || str === '0') return 0;
+  str = str.replace(/^rp\s*/i, '').trim();
+  if (/^\d{1,3}(\.\d{3})+$/.test(str)) {
+    str = str.replace(/\./g, '');
+  } else if (/^\d{1,3}(\.\d{3})+,\d+$/.test(str)) {
+    str = str.replace(/\./g, '').replace(',', '.');
+  } else if (str.includes(',') && !str.includes('.')) {
+    str = str.replace(',', '.');
+  }
+  let num = parseFloat(str);
+  return isNaN(num) ? 0 : num;
+}
+
 function renderPerformaTab() {
   if (!DOM.performaContentContainer) return;
-  const currentNama = state.profile.nama || '';
-  const currentNik = state.profile.nik || '';
+  const currentNama = state.profile ? (state.profile.nama || '') : '';
+  const currentNik = state.profile ? (state.profile.nik || '') : '';
+  const nikUpper = currentNik.toUpperCase().trim();
+  const userAreaUpper = (state.profile ? (state.profile.area || '') : '').toUpperCase().trim();
+  const isSiteAdmin = SITE_CODES.includes(nikUpper) || (state.isAdmin && SITE_CODES.includes(userAreaUpper)) || !!state.isSiteAdmin;
+  const isGlobalAdmin = nikUpper === 'ADMIN';
+  const isAdminOrSiteAdmin = isGlobalAdmin || isSiteAdmin || state.isAdmin;
 
   const insentifList = state.sheetsData.insentifRows || [];
-  const insentif = getBestMatchedItem(insentifList, currentNama, currentNik);
-
   const outputList = state.sheetsData.outputHariIni || [];
-  const outputObj = getBestMatchedItem(outputList, currentNama, currentNik);
-
-  const indoorCount = parseInt(insentif.indoor || '0', 10) || 0;
-  const outdoorCount = parseInt(insentif.outdoor || '0', 10) || 0;
-  const acCount = parseInt(insentif.ac || '0', 10) || 0;
-  const evTotal = (parseInt(insentif.ev || '0', 10) || 0) +
-                  (parseInt(insentif.ev1 || '0', 10) || 0) +
-                  (parseInt(insentif.ev2 || '0', 10) || 0) +
-                  (parseInt(insentif.ev3 || '0', 10) || 0);
-
-  const totalUnitCount = indoorCount + outdoorCount + acCount + evTotal;
 
   // Calculate working days from day 1 of current month to today (excluding Sundays & national holidays)
   const nowPerf = new Date();
@@ -2911,24 +3022,107 @@ function renderPerformaTab() {
     }
   }
 
+  let displayName = state.profile.nama || 'Teknisi';
+  let displayInsentif = 'Rp 0';
+  let displayOutputHariIni = '0';
+  let indoorCount = 0;
+  let outdoorCount = 0;
+  let acCount = 0;
+  let evTotal = 0;
+  let techBreakdown = [];
+
+  if (isAdminOrSiteAdmin && insentifList.length > 0) {
+    // ==========================================================
+    // AGGREGATED QUANTITIES FOR ADMIN / SITE ADMIN
+    // ==========================================================
+    let totalInsentifSum = 0;
+    let totalOutputTodaySum = 0;
+
+    const activeInsentifList = insentifList.filter(item => {
+      if (!item || !item.nama) return false;
+      if (isGlobalAdmin) return true;
+      return isMatchForCurrentRole(item.nama);
+    });
+
+    const outputMap = {};
+    outputList.forEach(item => {
+      if (item && item.nama) {
+        outputMap[cleanNameString(item.nama)] = parseInt(item.total_output || '0', 10) || 0;
+      }
+    });
+
+    techBreakdown = activeInsentifList.map(item => {
+      const inVal = parseInt(item.indoor || '0', 10) || 0;
+      const outVal = parseInt(item.outdoor || '0', 10) || 0;
+      const acVal = parseInt(item.ac || '0', 10) || 0;
+      const evVal = (parseInt(item.ev || '0', 10) || 0) +
+                    (parseInt(item.ev1 || '0', 10) || 0) +
+                    (parseInt(item.ev2 || '0', 10) || 0) +
+                    (parseInt(item.ev3 || '0', 10) || 0);
+      const totalUnit = inVal + outVal + acVal + evVal;
+
+      const insentifNum = parseRupiahToNumber(item.insentif);
+      const cName = cleanNameString(item.nama);
+      const todayOut = outputMap[cName] !== undefined ? outputMap[cName] : (parseInt(item.today_output || '0', 10) || 0);
+
+      totalInsentifSum += insentifNum;
+      totalOutputTodaySum += todayOut;
+      indoorCount += inVal;
+      outdoorCount += outVal;
+      acCount += acVal;
+      evTotal += evVal;
+
+      return {
+        nama: item.nama,
+        insentif: insentifNum,
+        todayOutput: todayOut,
+        totalUnit
+      };
+    });
+
+    displayInsentif = formatRupiah(totalInsentifSum);
+    displayOutputHariIni = String(totalOutputTodaySum);
+
+  } else {
+    // ==========================================================
+    // SINGLE TECHNICIAN QUANTITIES (NORMAL LOGIN)
+    // ==========================================================
+    const insentif = getBestMatchedItem(insentifList, currentNama, currentNik);
+    const outputObj = getBestMatchedItem(outputList, currentNama, currentNik);
+
+    indoorCount = parseInt(insentif.indoor || '0', 10) || 0;
+    outdoorCount = parseInt(insentif.outdoor || '0', 10) || 0;
+    acCount = parseInt(insentif.ac || '0', 10) || 0;
+    evTotal = (parseInt(insentif.ev || '0', 10) || 0) +
+              (parseInt(insentif.ev1 || '0', 10) || 0) +
+              (parseInt(insentif.ev2 || '0', 10) || 0) +
+              (parseInt(insentif.ev3 || '0', 10) || 0);
+
+    displayInsentif = formatRupiah(insentif.insentif);
+    displayOutputHariIni = outputObj.total_output || '0';
+  }
+
+  const totalUnitCount = indoorCount + outdoorCount + acCount + evTotal;
   const calculatedRataRata = workingDaysCount > 0 ? (totalUnitCount / workingDaysCount).toFixed(1) : '0.0';
-  const selisih160 = Math.abs(totalUnitCount - 160);
-  const selisih107 = Math.abs(totalUnitCount - 107);
+
+  const techCount = (isAdminOrSiteAdmin && insentifList.length > 0) ? insentifList.length : 1;
+  const selisih160 = Math.abs(totalUnitCount - (160 * techCount));
+  const selisih107 = Math.abs(totalUnitCount - (107 * techCount));
   const calculatedSelisih = `${selisih160} / ${selisih107}`;
 
   DOM.performaContentContainer.innerHTML = `
     <!-- Hero Performance Overview -->
     <div class="performa-hero-card">
       <div class="performa-hero-title">
-        <i data-lucide="user"></i> ${state.profile.nama || 'Teknisi'}
+        <i data-lucide="user"></i> ${escapeHtml(displayName)}
       </div>
       <div class="performa-hero-grid">
         <div class="performa-hero-item">
-          <div class="performa-hero-value">${formatRupiah(insentif.insentif)}</div>
+          <div class="performa-hero-value">${displayInsentif}</div>
           <div class="performa-hero-label">Insentif</div>
         </div>
         <div class="performa-hero-item">
-          <div class="performa-hero-value" style="color:var(--secondary);">${outputObj.total_output || '0'}</div>
+          <div class="performa-hero-value" style="color:var(--secondary);">${escapeHtml(displayOutputHariIni)}</div>
           <div class="performa-hero-label">Output Hari Ini</div>
         </div>
       </div>
@@ -2963,15 +3157,15 @@ function renderPerformaTab() {
         <div class="stat-lbl">EV</div>
       </div>
       <div class="performa-stat-box">
-        <div class="stat-val" style="color:var(--secondary);">${insentif.ac || '0'}</div>
+        <div class="stat-val" style="color:var(--secondary);">${acCount}</div>
         <div class="stat-lbl">AC</div>
       </div>
       <div class="performa-stat-box">
-        <div class="stat-val" style="color:var(--info, #3b82f6);">${insentif.indoor || '0'}</div>
+        <div class="stat-val" style="color:var(--info, #3b82f6);">${indoorCount}</div>
         <div class="stat-lbl">INDOOR</div>
       </div>
       <div class="performa-stat-box">
-        <div class="stat-val" style="color:var(--warning);">${insentif.outdoor || '0'}</div>
+        <div class="stat-val" style="color:var(--warning);">${outdoorCount}</div>
         <div class="stat-lbl">OUTDOOR</div>
       </div>
     </div>`;
@@ -3061,9 +3255,13 @@ function renderPartKembaliTab() {
           </span>
         </div>
       </div>
+      <div style="font-size:10px; color:var(--text-muted); margin-top:2px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding-left:40px;">
+        ${item.teknisi ? `<span><i data-lucide="user" title="Teknisi" style="width:10px; height:10px; display:inline;"></i> <strong style="color:var(--text-main); font-weight:600;">${escapeHtml(item.teknisi)}</strong></span>` : ''}
+        ${item.tgl ? `<span><i data-lucide="calendar" title="Tanggal" style="width:10px; height:10px; display:inline;"></i> <strong style="color:var(--text-main); font-weight:600;">${escapeHtml(item.tgl)}</strong></span>` : ''}
+      </div>
       ${item.noReservasi ? `
       <div style="font-size:10.5px; color:var(--primary); font-weight:700; word-break:break-all; padding-left:40px; margin-top:1px;">
-        <i data-lucide="bookmark" style="width:10.5px;height:10.5px;display:inline;"></i> ${escapeHtml(item.noReservasi)}
+        <i data-lucide="bookmark" title="No Reservasi" style="width:10.5px;height:10.5px;display:inline;"></i> ${escapeHtml(item.noReservasi)}
       </div>` : ''}
     </div>
   `).join('');
@@ -3081,6 +3279,7 @@ function renderTagihanTab() {
     return (
       (item.noInvoice || '').toUpperCase().includes(searchQ) ||
       (item.namaKonsumen || '').toUpperCase().includes(searchQ) ||
+      (item.teknisi || '').toUpperCase().includes(searchQ) ||
       (item.jumlah || '').toString().includes(searchQ)
     );
   });
@@ -3117,8 +3316,10 @@ function renderTagihanTab() {
         </div>
         <div style="flex:1; min-width:0;">
           <div style="font-size:10.5px; font-weight:700; color:var(--text-main); word-break:break-all;">${escapeHtml(item.noInvoice)}</div>
-          <div style="font-size:10px; color:var(--text-muted); margin-top:2px;">
-            <i data-lucide="user" style="width:10px; height:10px; display:inline;"></i> Konsumen: <strong style="color:var(--text-main); font-weight:600;">${escapeHtml(item.namaKonsumen)}</strong>
+          <div style="font-size:10px; color:var(--text-muted); margin-top:2px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+            <span><i data-lucide="wrench" title="Teknisi" style="width:10px; height:10px; display:inline;"></i> <strong style="color:var(--text-main); font-weight:600;">${escapeHtml(item.teknisi)}</strong></span>
+            <span><i data-lucide="user" title="Konsumen" style="width:10px; height:10px; display:inline;"></i> <strong style="color:var(--text-main); font-weight:600;">${escapeHtml(item.namaKonsumen)}</strong></span>
+            ${item.site && item.site !== '-' ? `<span style="background:var(--primary-light); color:var(--primary); padding:1px 5px; border-radius:4px; font-weight:700; font-size:9.5px;"><i data-lucide="map-pin" title="Site" style="width:9px; height:9px; display:inline;"></i> ${escapeHtml(item.site)}</span>` : ''}
           </div>
         </div>
       </div>

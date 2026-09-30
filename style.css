@@ -522,23 +522,31 @@ html[data-active-tab="tab-profile"] .nav-item[data-target="tab-profile"] svg {
   gap: 6px;
 }
 
-/* Global Custom Scrollbars (Thin, Sleek, Theme-Adaptive, No Native Arrows) */
+/* Global Custom Scrollbars (Extra Thin, Sleek & Subtle) */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 2.5px !important;
+  height: 2.5px !important;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: transparent !important;
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: var(--border-dark);
-  border-radius: var(--radius-sm);
+  background-color: rgba(255, 255, 255, 0.22) !important;
+  border-radius: 10px !important;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: var(--text-dark);
+  background-color: rgba(255, 255, 255, 0.45) !important;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2) !important;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.4) !important;
 }
 
 ::-webkit-scrollbar-button {
