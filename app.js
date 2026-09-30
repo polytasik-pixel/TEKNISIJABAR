@@ -371,6 +371,7 @@ function showAppScreen() {
   loadSheetsCache();
   startSheetsPolling();
   syncUserProfileAreaFromSheet();
+  fetchFinishSheetData().catch(() => {});
   loadPipoCache();
   fetchPipoData();
 }
@@ -1031,13 +1032,50 @@ function handleLogout() {
 }
 
 function performLogout() {
+  // Preserve PIPO Cache (Part Pengganti), Saved Login Credentials, and App Theme
+  const keepKeys = [
+    STORAGE_KEYS.PIPO_CACHE,
+    STORAGE_KEYS.SAVED_LOGIN,
+    STORAGE_KEYS.THEME
+  ];
+
+  try {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && !keepKeys.includes(key)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+  } catch (e) {
+    console.warn('Gagal menghapus cache saat logout:', e);
+  }
+
+  state.profile = { id: '', nama: '', nik: '', psw: '', usePsw: true };
+  state.finishHistory = [];
+  state.finishParsedAllRows = [];
+  state.sheetsData = {
+    lastUpdateTimestamp: '',
+    pendingTimestamp: '',
+    performaTimestamp: '',
+    partKembaliTimestamp: '',
+    tagihanTimestamp: '',
+    lastSyncTime: 0,
+    pendingCases: [],
+    insentifRows: [],
+    rata2Rows: [{ rata_rata: '0.0', selisih_unit: '0' }],
+    outputHariIni: [],
+    notifications: [],
+    partBelumKembali: [],
+    tagihanRows: []
+  };
+
   document.documentElement.classList.remove('is-logged-in');
   document.documentElement.classList.remove('is-admin');
   document.documentElement.removeAttribute('data-active-tab');
-  localStorage.removeItem(STORAGE_KEYS.SESSION);
-  localStorage.removeItem(STORAGE_KEYS.LAST_TAB);
   showLoginScreen();
-  showToast('Anda telah keluar dari akun.', 'info');
+  showToast('Anda telah keluar dari akun. Semua cache data (kecuali Part Pengganti) telah dibersihkan.', 'info');
 }
 
 function saveProfileSilently() {
