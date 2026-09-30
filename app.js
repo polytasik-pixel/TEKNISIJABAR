@@ -1748,20 +1748,6 @@ async function fetchFinishSheetData() {
     }
   }
 
-  // Incorporate local submissions in state.finishHistory
-  if (state.finishHistory && state.finishHistory.length > 0) {
-    for (const localEntry of state.finishHistory) {
-      if (localEntry.tglLaporan && localEntry.tglLaporan.startsWith(currentYearMonth)) {
-        if (!parsedAllRows.some(r => r.tglLaporan === localEntry.tglLaporan && isSameTechnicianName(r.nama, localEntry.nama))) {
-          parsedAllRows.push(localEntry);
-        }
-        if (targetTechName && isSameTechnicianName(localEntry.nama, targetTechName)) {
-          filledDatesSet.add(localEntry.tglLaporan);
-        }
-      }
-    }
-  }
-
   // Sort parsedAllRows by tglLaporan descending
   parsedAllRows.sort((a, b) => b.tglLaporan.localeCompare(a.tglLaporan));
   state.finishParsedAllRows = parsedAllRows;
@@ -2142,6 +2128,7 @@ async function handleSubmitFinish() {
   fetchFinishSheetData().then(({ filledDatesSet, parsedAllRows }) => {
     renderMissingDatesList(filledDatesSet);
     renderFinishAllDataTab(parsedAllRows);
+    renderFinishHistory();
   }).catch(() => {});
 
   showToast('✅ Finish Harian berhasil disimpan!', 'success');
@@ -2150,30 +2137,36 @@ async function handleSubmitFinish() {
 
 function renderFinishHistory() {
   if (!DOM.finishHistoryList) return;
-  const list = state.finishHistory || [];
+  const list = state.finishParsedAllRows || [];
+  const targetTechName = state.profile ? state.profile.nama : '';
 
-  if (list.length === 0) {
+  const filtered = list.filter(item => state.isAdmin || matchTechName(item.nama, targetTechName, state.profile ? state.profile.nik : ''));
+
+  if (filtered.length === 0) {
     DOM.finishHistoryList.innerHTML = `
       <div class="empty-state-sm">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted);margin-bottom:6px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="9"></line><line x1="9" y1="13" x2="15" y2="13"></line></svg>
-        <p>Belum ada riwayat finish harian yang di-submit.</p>
+        <i data-lucide="clipboard" style="width:32px; height:32px; color:var(--text-muted); margin-bottom:6px;"></i>
+        <p>Belum ada riwayat finish harian di Google Sheet.</p>
       </div>`;
+    lucide.createIcons();
     return;
   }
 
-  DOM.finishHistoryList.innerHTML = list.map(item => `
+  DOM.finishHistoryList.innerHTML = filtered.map(item => `
     <div class="finish-history-card">
       <div class="flex-between align-center mb-1">
         <span style="font-size:11px; font-weight:600; color:var(--primary);">${escapeHtml(item.nama)}</span>
-        <span style="font-size:10px; color:var(--text-muted);">${escapeHtml(item.timestamp)}</span>
+        <span style="font-size:10px; color:var(--text-muted);">${escapeHtml(item.timestampCreated || item.tglLaporan)}</span>
       </div>
-      <div style="font-weight:700; font-size:13px; color:var(--text-color);">Tanggal: ${escapeHtml(item.tgl)}</div>
+      <div style="font-weight:700; font-size:13px; color:var(--text-color);">Tanggal: ${escapeHtml(item.tglLaporan)}</div>
       <div style="font-size:11.5px; color:var(--text-muted); margin-top:2px;">
         Finish In: ${escapeHtml(item.finishIndoor)} | Finish Out: ${escapeHtml(item.finishOutdoor)} | WIP Comp: ${escapeHtml(item.wipComp)} | Batal: ${escapeHtml(item.batal)}
       </div>
       ${item.ket ? `<div style="font-size:11px; color:var(--text-muted); font-style:italic; margin-top:2px;">Ket: ${escapeHtml(item.ket)}</div>` : ''}
     </div>
   `).join('');
+
+  lucide.createIcons();
 }
 
 window.loadMorePipoItems = function() {
