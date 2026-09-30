@@ -155,6 +155,7 @@ html.is-logged-in #screen-app {
 html[data-active-tab="tab-finish"] #tab-finish,
 html[data-active-tab="tab-finish-all"] #tab-finish,
 html[data-active-tab="tab-pipo"] #tab-pipo,
+html[data-active-tab="tab-pencapaian-pds"] #tab-pencapaian-pds,
 html[data-active-tab="tab-scan"] #tab-scan,
 html[data-active-tab="tab-history"] #tab-history,
 html[data-active-tab="tab-pending"] #tab-pending,
@@ -245,6 +246,12 @@ html[data-current-mode="pipo"] .nav-item[data-mode="pipo"] {
   display: flex !important;
 }
 
+/* Mode PDS Nav Items */
+html[data-active-tab="tab-pencapaian-pds"] .nav-item[data-mode="pds"],
+html[data-current-mode="pds"] .nav-item[data-mode="pds"] {
+  display: flex !important;
+}
+
 /* All Mode Nav Items (Menu & Profile) */
 html[data-active-tab]:not([data-active-tab="tab-menu"]) .nav-item[data-mode="all"] {
   display: flex !important;
@@ -254,7 +261,8 @@ html[data-active-tab]:not([data-active-tab="tab-menu"]) .nav-item[data-mode="all
 html[data-current-mode="teknisi"] .nav-item:not([data-mode="teknisi"]):not([data-mode="all"]),
 html[data-current-mode="scan"] .nav-item:not([data-mode="scan"]):not([data-mode="all"]),
 html[data-current-mode="finish"] .nav-item:not([data-mode="finish"]):not([data-mode="all"]),
-html[data-current-mode="pipo"] .nav-item:not([data-mode="pipo"]):not([data-mode="all"]) {
+html[data-current-mode="pipo"] .nav-item:not([data-mode="pipo"]):not([data-mode="all"]),
+html[data-current-mode="pds"] .nav-item:not([data-mode="pds"]):not([data-mode="all"]) {
   display: none !important;
 }
 
@@ -2562,6 +2570,21 @@ input:checked + .slider:before { transform: translateX(20px); }
 .mode-tagihan .mode-card-btn {
   background: rgba(245, 158, 11, 0.15);
   color: #f59e0b;
+}
+
+.mode-card.mode-pds:hover, .mode-card.mode-pds:active {
+  border-color: #06b6d4;
+  background: var(--bg-input);
+}
+
+.mode-pds .mode-card-icon {
+  background: linear-gradient(135deg, #06b6d4, #0891b2);
+  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.3);
+}
+
+.mode-pds .mode-card-btn {
+  background: rgba(6, 182, 212, 0.15);
+  color: #06b6d4;
 }
 
 .bg-readonly {

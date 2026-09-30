@@ -10,6 +10,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
+  <!-- Chart.js for PDS Visual Graph -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   
@@ -59,7 +62,7 @@
           var savedTab = localStorage.getItem('teknisi_last_active_tab');
           var savedMode = localStorage.getItem('teknisi_last_active_mode');
           if (!savedMode || savedMode === 'menu') savedMode = 'teknisi';
-          var validTabs = ['tab-menu', 'tab-pending', 'tab-performa', 'tab-notif', 'tab-part-kembali', 'tab-tagihan', 'tab-pipo', 'tab-finish', 'tab-finish-all', 'tab-profile'];
+          var validTabs = ['tab-menu', 'tab-pending', 'tab-performa', 'tab-notif', 'tab-part-kembali', 'tab-tagihan', 'tab-pipo', 'tab-finish', 'tab-finish-all', 'tab-profile', 'tab-pencapaian-pds'];
           var activeTab = (hashTab && validTabs.indexOf(hashTab) !== -1) ? hashTab : ((savedTab && validTabs.indexOf(savedTab) !== -1) ? savedTab : 'tab-menu');
           document.documentElement.setAttribute('data-active-tab', activeTab);
           document.documentElement.setAttribute('data-current-mode', savedMode);
@@ -185,6 +188,21 @@
               <p>Pilih modul yang ingin Anda buka saat ini:</p>
             </div>
 
+            <!-- MODE 5: PENCAPAIAN PDS -->
+            <div class="mode-card mode-pds" id="btn-select-mode-pds">
+              <div class="mode-card-icon">
+                <i data-lucide="bar-chart-3"></i>
+              </div>
+              <div class="mode-card-content">
+                <h3>PENCAPAIAN PDS</h3>
+                <p>Cek data Load, Pending & % Pending per site serta Grafik Pencapaian All Site.</p>
+                <div class="mode-card-btn">
+                  <span>BUKA PENCAPAIAN PDS</span>
+                  <i data-lucide="arrow-right"></i>
+                </div>
+              </div>
+            </div>
+
             <!-- MODE 1: PORTAL TEKNISI -->
             <div class="mode-card mode-teknisi" id="btn-select-mode-teknisi">
               <div class="mode-card-icon">
@@ -232,6 +250,28 @@
           </div>
         </section>
         
+        <!-- TAB: PENCAPAIAN PDS (COLUMN AL GOOGLE SHEET DATA) -->
+        <section id="tab-pencapaian-pds" class="tab-content">
+          <div class="card pds-main-card" style="height:100%; display:flex; flex-direction:column; min-height:0; overflow:hidden; padding:10px;">
+            <div class="card-header flex-between align-center" style="flex:0 0 auto; margin-bottom:8px; border-bottom:1px solid var(--border-color); padding-bottom:6px;">
+              <div class="card-title" style="color:var(--primary); font-size:14px; font-weight:700; display:flex; align-items:center; gap:6px;">
+                <i data-lucide="bar-chart-3"></i> Pencapaian PDS (All Site)
+                <span class="badge-count" id="pds-site-count">0 Site</span>
+              </div>
+              <button type="button" id="btn-refresh-pds" class="btn btn-ghost btn-xs" style="font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px;" title="Refresh Data">
+                <i data-lucide="refresh-cw" id="sync-icon-pds"></i> Refresh
+              </button>
+            </div>
+
+            <!-- Scrollable List & Chart Container -->
+            <div id="pds-content-container" class="pds-container" style="flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding-right:2px;">
+              <div class="empty-state-sm">
+                <i data-lucide="loader-2" class="spin-lg"></i>
+                <p>Memuat data Pencapaian PDS...</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
 
         <!-- TAB 2: PENDING CASES (GOOGLESHEET DATA COLS A1-JXXX) -->
@@ -813,6 +853,11 @@
         <button class="nav-item" data-target="tab-pipo" data-mode="pipo">
           <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left-right"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>
           <span>Pengganti</span>
+        </button>
+
+        <button class="nav-item" data-target="tab-pencapaian-pds" data-mode="pds" title="Pencapaian PDS">
+          <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bar-chart-3"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+          <span>PDS</span>
         </button>
       </nav>
 

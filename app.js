@@ -49,7 +49,8 @@ let state = {
     outputHariIni: [],
     notifications: [],
     partBelumKembali: [],
-    tagihanRows: []
+    tagihanRows: [],
+    pdsRows: []
   },
   sheetsPollTimer: null,
   isFetchingSheets: false,
@@ -104,6 +105,7 @@ const DOM = {
   btnSelectModeTeknisi: document.getElementById('btn-select-mode-teknisi'),
   btnSelectModePipo: document.getElementById('btn-select-mode-pipo'),
   btnSelectModeFinish: document.getElementById('btn-select-mode-finish'),
+  btnSelectModePds: document.getElementById('btn-select-mode-pds'),
 
   // Part Pengganti (PIPO) Controls
   inputSearchPipo: document.getElementById('input-search-pipo'),
@@ -239,7 +241,13 @@ const DOM = {
   waModalSiteTitle: document.getElementById('wa-modal-site-title'),
   btnOpenWaPending: document.getElementById('btn-open-wa-pending'),
   btnOpenWaPart: document.getElementById('btn-open-wa-part'),
-  btnOpenWaTagihan: document.getElementById('btn-open-wa-tagihan')
+  btnOpenWaTagihan: document.getElementById('btn-open-wa-tagihan'),
+
+  // Pencapaian PDS Elements
+  pdsContentContainer: document.getElementById('pds-content-container'),
+  btnRefreshPds: document.getElementById('btn-refresh-pds'),
+  syncIconPds: document.getElementById('sync-icon-pds'),
+  pdsSiteCount: document.getElementById('pds-site-count')
 };
 
 // ==========================================
@@ -372,7 +380,7 @@ function showAppScreen() {
   const hashTab = window.location.hash ? window.location.hash.replace('#', '') : '';
   const savedTab = localStorage.getItem(STORAGE_KEYS.LAST_TAB);
 
-  const validTabs = ['tab-menu', 'tab-pending', 'tab-performa', 'tab-notif', 'tab-part-kembali', 'tab-tagihan', 'tab-pipo', 'tab-finish', 'tab-finish-all', 'tab-profile'];
+  const validTabs = ['tab-menu', 'tab-pending', 'tab-performa', 'tab-notif', 'tab-part-kembali', 'tab-tagihan', 'tab-pipo', 'tab-finish', 'tab-finish-all', 'tab-profile', 'tab-pencapaian-pds'];
   let initialTab = 'tab-menu';
 
   if (hashTab && validTabs.includes(hashTab)) {
@@ -530,6 +538,21 @@ function setupEventListeners() {
   if (DOM.btnSelectModeFinish) {
     DOM.btnSelectModeFinish.addEventListener('click', () => {
       requestTabSwitch('tab-finish');
+    });
+  }
+  if (DOM.btnSelectModePds) {
+    DOM.btnSelectModePds.addEventListener('click', () => {
+      requestTabSwitch('tab-pencapaian-pds');
+    });
+  }
+  if (DOM.btnRefreshPds) {
+    DOM.btnRefreshPds.addEventListener('click', () => {
+      const syncIcon = document.getElementById('sync-icon-pds') || DOM.syncIconPds;
+      if (syncIcon) syncIcon.classList.add('spinning');
+      showToast('🔄 Memperbarui data Pencapaian PDS...', 'info');
+      fetchGoogleSheetsData().finally(() => {
+        if (syncIcon) syncIcon.classList.remove('spinning');
+      });
     });
   }
   if (DOM.btnSelectModePartKembali) {
@@ -1161,6 +1184,8 @@ function updateModeNavVisibility(targetTabId) {
     state.currentMode = 'teknisi';
   } else if (targetTabId === 'tab-pipo') {
     state.currentMode = 'pipo';
+  } else if (targetTabId === 'tab-pencapaian-pds') {
+    state.currentMode = 'pds';
   } else if (targetTabId === 'tab-finish' || targetTabId === 'tab-finish-all') {
     state.currentMode = 'finish';
   } else if (targetTabId === 'tab-profile') {
@@ -2961,6 +2986,48 @@ async function fetchGoogleSheetsData() {
       }
     }
 
+    // 6. Pencapaian PDS (Sheet DATA, Column AL / Index 37)
+    const pdsRows = [];
+    if (rowsData && rowsData.length > 0) {
+      for (let r = 0; r < rowsData.length; r++) {
+        const cellVal = (rowsData[r] && rowsData[r][37] !== undefined) ? String(rowsData[r][37]).trim() : '';
+        if (cellVal.toUpperCase().startsWith('LOAD ')) {
+          let siteName = cellVal.replace(/^LOAD\s+/i, '').trim();
+          siteName = siteName.replace(/[\s,]+dkk.*$/i, '').trim();
+
+          const loadValRaw = (rowsData[r + 1] && rowsData[r + 1][37] !== undefined) ? String(rowsData[r + 1][37]).trim() : '0';
+          const pendingValRaw = (rowsData[r + 2] && rowsData[r + 2][37] !== undefined) ? String(rowsData[r + 2][37]).trim() : '0';
+          const pctValRaw = (rowsData[r + 3] && rowsData[r + 3][37] !== undefined) ? String(rowsData[r + 3][37]).trim() : '0%';
+
+          const loadNum = parseInt(loadValRaw.replace(/[^0-9]/g, ''), 10) || 0;
+          const pendingNum = parseInt(pendingValRaw.replace(/[^0-9]/g, ''), 10) || 0;
+
+          let pctDisplay = pctValRaw;
+          if (!pctDisplay || pctDisplay.includes('#DIV/0!') || pctDisplay === 'NaN' || pctDisplay === '0') {
+            if (loadNum > 0) {
+              const calcPct = ((pendingNum / loadNum) * 100).toFixed(1);
+              pctDisplay = calcPct.endsWith('.0') ? Math.round(calcPct) + '%' : calcPct + '%';
+            } else {
+              pctDisplay = '0%';
+            }
+          }
+
+          let pctNum = parseFloat(pctDisplay.replace('%', '').trim()) || 0;
+          if (isNaN(pctNum)) pctNum = 0;
+
+          pdsRows.push({
+            site: siteName || 'TSM',
+            load: loadNum,
+            loadRaw: loadValRaw || '0',
+            pending: pendingNum,
+            pendingRaw: pendingValRaw || '0',
+            pctPending: pctDisplay,
+            pctNum: pctNum
+          });
+        }
+      }
+    }
+
     // Update state & single source of truth cache
     state.sheetsData = {
       lastUpdateTimestamp: pendingTimestamp,
@@ -2975,7 +3042,8 @@ async function fetchGoogleSheetsData() {
       outputHariIni,
       notifications,
       partBelumKembali,
-      tagihanRows
+      tagihanRows,
+      pdsRows
     };
 
     saveSheetsCache();
@@ -3002,7 +3070,11 @@ async function fetchGoogleSheetsData() {
 function startSheetsPolling() {
   stopSheetsPolling();
   fetchGoogleSheetsData();
-  state.sheetsPollTimer = setInterval(fetchGoogleSheetsData, 10000);
+  fetchPipoData();
+  state.sheetsPollTimer = setInterval(() => {
+    fetchGoogleSheetsData();
+    fetchPipoData();
+  }, 10000);
 }
 
 function stopSheetsPolling() {
@@ -3019,6 +3091,7 @@ function renderAllSheetsViews() {
   renderNotifTab();
   renderPartKembaliTab();
   renderTagihanTab();
+  renderPdsTab();
   updateBadges();
 }
 
@@ -4133,3 +4206,249 @@ function handleWaDirectOpen() {
   window.openWaUrl = window.open(waUrl, '_blank');
   showToast('📲 Membuka WhatsApp...', 'info');
 }
+
+// ==========================================
+// PENCAPAIAN PDS MODULE & CHART RENDERER
+// ==========================================
+function renderPdsTab() {
+  if (!DOM.pdsContentContainer) return;
+  const pdsList = state.sheetsData.pdsRows || [];
+
+  if (DOM.pdsSiteCount) {
+    DOM.pdsSiteCount.textContent = `${pdsList.length} Site`;
+  }
+
+  if (pdsList.length === 0) {
+    DOM.pdsContentContainer.innerHTML = `
+      <div class="empty-state-sm">
+        <i data-lucide="bar-chart-3" style="width:32px; height:32px; color:var(--text-muted); margin-bottom:6px;"></i>
+        <p>Belum ada data Pencapaian PDS dari Sheet.</p>
+      </div>`;
+    lucide.createIcons();
+    return;
+  }
+
+  // Calculate Aggregated Totals
+  let totalLoad = 0;
+  let totalPending = 0;
+  pdsList.forEach(item => {
+    totalLoad += item.load;
+    totalPending += item.pending;
+  });
+
+  const overallPctVal = totalLoad > 0 ? ((totalPending / totalLoad) * 100).toFixed(1) : '0';
+  const overallPctStr = overallPctVal.endsWith('.0') ? Math.round(overallPctVal) + '%' : overallPctVal + '%';
+
+  // 1. Overall Summary Stats Card
+  let html = `
+    <div class="pds-summary-card mb-2" style="background:var(--bg-card); border:1px solid var(--border-color); border-left:4px solid var(--primary); padding:10px 12px; border-radius:var(--radius-sm); box-shadow:var(--shadow-main); display:flex; flex-direction:column; gap:8px;">
+      <div class="flex-between align-center">
+        <div style="font-size:12px; font-weight:700; color:var(--text-main); display:flex; align-items:center; gap:6px;">
+          <i data-lucide="award" style="color:var(--primary); width:15px; height:15px;"></i>
+          <span>RINGKASAN PENCAPAIAN PDS ALL SITE</span>
+        </div>
+        <span class="badge" style="background:var(--primary-light); color:var(--primary); font-size:11px; font-weight:800; padding:2px 8px; border-radius:4px;">
+          ${pdsList.length} Site Total
+        </span>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; text-align:center;">
+        <div style="background:var(--bg-input); padding:6px 4px; border-radius:4px; border:1px solid var(--border-color);">
+          <div style="font-size:9.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">TOTAL LOAD</div>
+          <div style="font-size:15px; font-weight:800; color:var(--primary); margin-top:2px;">${totalLoad.toLocaleString('id-ID')}</div>
+        </div>
+        <div style="background:var(--bg-input); padding:6px 4px; border-radius:4px; border:1px solid var(--border-color);">
+          <div style="font-size:9.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">TOTAL PENDING</div>
+          <div style="font-size:15px; font-weight:800; color:var(--warning); margin-top:2px;">${totalPending.toLocaleString('id-ID')}</div>
+        </div>
+        <div style="background:var(--bg-input); padding:6px 4px; border-radius:4px; border:1px solid var(--border-color);">
+          <div style="font-size:9.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">% PENDING</div>
+          <div style="font-size:15px; font-weight:800; color:${parseFloat(overallPctVal) > 5 ? 'var(--danger)' : 'var(--success)'}; margin-top:2px;">${overallPctStr}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // 2. Chart Box (Grafik Pencapaian All Site)
+  html += `
+    <div class="card pds-chart-card mb-2" style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:10px 12px; box-shadow:var(--shadow-main); display:flex; flex-direction:column; gap:8px;">
+      <div class="flex-between align-center" style="border-bottom:1px dashed var(--border-color); padding-bottom:6px;">
+        <div style="font-size:12px; font-weight:700; color:var(--text-main); display:flex; align-items:center; gap:6px;">
+          <i data-lucide="bar-chart-2" style="color:var(--secondary); width:15px; height:15px;"></i>
+          <span>GRAFIK PENCAPAIAN ALL SITE</span>
+        </div>
+        <div style="font-size:10px; color:var(--text-muted); display:flex; gap:10px; font-weight:700;">
+          <span style="color:var(--primary); display:flex; align-items:center; gap:3px;"><span style="width:8px; height:8px; background:var(--primary); border-radius:2px; display:inline-block;"></span> Load</span>
+          <span style="color:var(--warning); display:flex; align-items:center; gap:3px;"><span style="width:8px; height:8px; background:var(--warning); border-radius:2px; display:inline-block;"></span> Pending</span>
+        </div>
+      </div>
+      <div class="chart-canvas-wrapper" style="position:relative; width:100%; height:200px;">
+        <canvas id="pdsChartCanvas"></canvas>
+      </div>
+    </div>
+  `;
+
+  // 3. Grid Cards for Each Site
+  html += `<div class="pds-site-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:8px; margin-top:2px;">`;
+
+  pdsList.forEach(item => {
+    const isZeroLoad = item.load === 0;
+    const isHighPending = item.pctNum > 5;
+    const badgeColor = isZeroLoad ? 'var(--text-muted)' : (isHighPending ? 'var(--danger)' : 'var(--primary)');
+    const badgeBg = isZeroLoad ? 'var(--bg-input)' : (isHighPending ? 'rgba(239, 68, 68, 0.15)' : 'var(--primary-light)');
+
+    let pctBarWidth = Math.min(100, Math.max(0, item.pctNum));
+    if (isZeroLoad) pctBarWidth = 0;
+
+    html += `
+      <div class="pds-site-card" style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:10px 12px; display:flex; flex-direction:column; gap:8px; box-shadow:var(--shadow-main);">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <div style="width:28px; height:28px; border-radius:4px; background:var(--primary-light); color:var(--primary); font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center;">
+              ${escapeHtml(item.site.substring(0, 3))}
+            </div>
+            <div>
+              <div style="font-size:13px; font-weight:800; color:var(--text-main); line-height:1.1;">${escapeHtml(item.site)}</div>
+              <div style="font-size:9.5px; color:var(--text-muted);">Data Load & Pending PDS</div>
+            </div>
+          </div>
+          <span style="font-size:11px; font-weight:800; padding:2px 8px; border-radius:4px; background:${badgeBg}; color:${badgeColor};">
+            ${escapeHtml(item.pctPending)}
+          </span>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; background:var(--bg-input); padding:8px; border-radius:4px; border:1px solid var(--border-color);">
+          <div>
+            <div style="font-size:9.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">LOAD BULAN INI</div>
+            <div style="font-size:15px; font-weight:800; color:var(--primary); margin-top:2px;">${item.load.toLocaleString('id-ID')}</div>
+          </div>
+          <div style="border-left:1px solid var(--border-color); padding-left:8px;">
+            <div style="font-size:9.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">PENDING BULAN INI</div>
+            <div style="font-size:15px; font-weight:800; color:var(--warning); margin-top:2px;">${item.pending.toLocaleString('id-ID')}</div>
+          </div>
+        </div>
+
+        <!-- Visual Progress Bar for % Pending -->
+        <div style="display:flex; flex-direction:column; gap:3px;">
+          <div style="display:flex; justify-content:space-between; font-size:9.5px; font-weight:700; color:var(--text-muted);">
+            <span>Status Pending</span>
+            <span style="color:${badgeColor};">${escapeHtml(item.pctPending)}</span>
+          </div>
+          <div style="width:100%; height:6px; background:var(--bg-input); border-radius:3px; overflow:hidden; border:1px solid var(--border-color);">
+            <div style="width:${pctBarWidth}%; height:100%; background:${badgeColor}; transition:width 0.4s ease;"></div>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+
+  DOM.pdsContentContainer.innerHTML = html;
+  lucide.createIcons();
+
+  // Render Chart.js Grouped Bar Chart
+  setTimeout(() => {
+    renderPdsChart(pdsList);
+  }, 50);
+}
+
+function renderPdsChart(pdsList) {
+  const canvas = document.getElementById('pdsChartCanvas');
+  if (!canvas) return;
+
+  if (window.pdsChartInstance) {
+    try { window.pdsChartInstance.destroy(); } catch (e) {}
+    window.pdsChartInstance = null;
+  }
+
+  if (typeof Chart === 'undefined') {
+    console.warn('Chart.js not loaded');
+    return;
+  }
+
+  const labels = pdsList.map(item => item.site);
+  const loadData = pdsList.map(item => item.load);
+  const pendingData = pdsList.map(item => item.pending);
+
+  const isDark = state.theme === 'dark';
+  const textColor = isDark ? '#94a3b8' : '#475569';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.07)';
+
+  const ctx = canvas.getContext('2d');
+  window.pdsChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Load Bulan Ini',
+          data: loadData,
+          backgroundColor: '#10b981',
+          borderColor: '#059669',
+          borderWidth: 1,
+          borderRadius: 4
+        },
+        {
+          label: 'Pending Bulan Ini',
+          data: pendingData,
+          backgroundColor: '#f59e0b',
+          borderColor: '#d97706',
+          borderWidth: 1,
+          borderRadius: 4
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            footer: function(tooltipItems) {
+              const idx = tooltipItems[0].dataIndex;
+              if (pdsList[idx]) {
+                return '% Pending: ' + pdsList[idx].pctPending;
+              }
+              return '';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            color: gridColor
+          },
+          ticks: {
+            color: textColor,
+            font: {
+              size: 10,
+              family: 'Plus Jakarta Sans',
+              weight: 'bold'
+            }
+          }
+        },
+        y: {
+          beginAtZero: true,
+          grid: {
+            color: gridColor
+          },
+          ticks: {
+            color: textColor,
+            font: {
+              size: 10,
+              family: 'Plus Jakarta Sans'
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
