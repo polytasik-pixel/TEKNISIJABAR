@@ -237,20 +237,14 @@
         <!-- TAB 2: PENDING CASES (GOOGLESHEET DATA COLS A1-JXXX) -->
         <section id="tab-pending" class="tab-content">
           <div class="card">
-            <div class="card-header">
+            <div class="card-header flex-between align-center">
               <div class="card-title">
                 <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-clock" style="color:var(--primary);"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Data Case Pending
-                <span class="badge-count" id="pending-tech-count"><script>
-                  try {
-                    var raw = localStorage.getItem('google_sheets_cache');
-                    if (raw) {
-                      var sc = JSON.parse(raw);
-                      if (sc && sc.pendingCases) { document.write(sc.pendingCases.length + ' Case'); }
-                      else { document.write('0 Case'); }
-                    } else { document.write('0 Case'); }
-                  } catch(e) { document.write('0 Case'); }
-                </script></span>
+                <span class="badge-count" id="pending-tech-count">0 Case</span>
               </div>
+              <button type="button" id="btn-open-wa-pending" class="btn btn-xs" style="display:none; font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px; background:#25D366; color:#fff; border:none;" title="Kirim WA Ke Teknisi">
+                <i data-lucide="message-square"></i> Kirim WA
+              </button>
             </div>
 
             <!-- Search Filter Bar -->
@@ -356,11 +350,14 @@
         <!-- TAB: PART BELUM KEMBALI -->
         <section id="tab-part-kembali" class="tab-content">
           <div class="card">
-            <div class="card-header">
+            <div class="card-header flex-between align-center">
               <div class="card-title" style="color: var(--primary);">
                 <i data-lucide="package"></i> Part Bekas
                 <span class="badge-count" id="part-kembali-count">0 Item</span>
               </div>
+              <button type="button" id="btn-open-wa-part" class="btn btn-xs" style="display:none; font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px; background:#25D366; color:#fff; border:none;" title="Kirim WA Ke Teknisi">
+                <i data-lucide="message-square"></i> Kirim WA
+              </button>
             </div>
 
             <!-- Top Summary Box for Total QTY Part -->
@@ -398,11 +395,14 @@
         <!-- TAB: TAGIHAN TEKNISI -->
         <section id="tab-tagihan" class="tab-content">
           <div class="card">
-            <div class="card-header">
+            <div class="card-header flex-between align-center">
               <div class="card-title" style="color: var(--warning);">
                 <i data-lucide="banknote"></i> Tagihan Teknisi
                 <span class="badge-count" id="tagihan-count">0 Invoice</span>
               </div>
+              <button type="button" id="btn-open-wa-tagihan" class="btn btn-xs" style="display:none; font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px; background:#25D366; color:#fff; border:none;" title="Kirim WA Ke Teknisi">
+                <i data-lucide="message-square"></i> Kirim WA
+              </button>
             </div>
 
             <!-- Top Summary Box for Total Tagihan Rupiah -->
@@ -565,9 +565,14 @@
                   <div class="card-title" style="color:var(--primary); font-size:14px; font-weight:700; display:flex; align-items:center; gap:6px;">
                     <i data-lucide="clipboard-list"></i> Semua Data Finish (Bulan Ini)
                   </div>
-                  <button type="button" id="btn-refresh-finish-all" class="btn btn-ghost btn-xs" style="display:none; font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px;" title="Refresh Data dari Google Sheet">
-                    <i data-lucide="refresh-cw" id="sync-icon-finish-all"></i> Refresh Data
-                  </button>
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <button type="button" id="btn-download-finish-excel" class="btn btn-xs" style="display:none; font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px; background:var(--secondary); color:#fff; border:none;" title="Unduh Data Finish (Excel)">
+                      <i data-lucide="download"></i> Excel
+                    </button>
+                    <button type="button" id="btn-refresh-finish-all" class="btn btn-ghost btn-xs" style="display:none; font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px;" title="Refresh Data dari Google Sheet">
+                      <i data-lucide="refresh-cw" id="sync-icon-finish-all"></i> Refresh Data
+                    </button>
+                  </div>
                 </div>
 
                 <!-- Filter Bar (Card Pencarian Paten - 1 Baris) -->
@@ -697,6 +702,27 @@
                 </form>
               </div>
 
+              <!-- Card Form Fonte WhatsApp API Token (Admin / Site Admin Only) -->
+              <div class="card card-fonte-form" id="card-fonte-form" style="display:none; margin-top:12px;">
+                <div class="card-title mb-2" style="color:var(--primary); display:flex; align-items:center; gap:6px;">
+                  <i data-lucide="message-square" style="width:15px; height:15px;"></i> Pengaturan Fonte WhatsApp API Token
+                </div>
+                <div class="card-desc mb-2" style="font-size:11.5px; color:var(--text-muted); line-height:1.4;">
+                  Masukkan API Token dari <a href="https://fonnte.com" target="_blank" rel="noopener" style="color:var(--primary); font-weight:700;">Fonnte.com</a> untuk mengirim pesan WhatsApp otomatis ke teknisi.
+                </div>
+                <div class="form-group mb-2" style="max-width:480px; width:100%;">
+                  <label for="profile-fonte-token" style="font-size:11.5px; font-weight:700;">Fonnte API Token</label>
+                  <div class="input-icon-wrapper">
+                    <i data-lucide="key-round" class="input-icon" style="width:14px; height:14px;"></i>
+                    <input type="text" id="profile-fonte-token" placeholder="Masukkan Token Fonnte..." autocomplete="off" style="font-size:12px;" />
+                  </div>
+                </div>
+                <div style="display:flex; justify-content:flex-start; margin-top:4px;">
+                  <button type="button" id="btn-save-fonte-token" class="btn btn-primary btn-sm" style="display:inline-flex; align-items:center; justify-content:center; width:auto; border-radius:4px; font-size:11.5px; font-weight:700; padding:7px 16px; gap:6px; cursor:pointer;">
+                    <i data-lucide="save" style="width:14px; height:14px;"></i> SIMPAN TOKEN FONTE
+                  </button>
+                </div>
+              </div>
 
             </div>
           </div>
@@ -839,9 +865,45 @@
           <button type="button" id="btn-dismiss-missing-modal" class="btn btn-secondary btn-sm" style="border-radius: 4px;">Tutup Halaman</button>
         </div>
       </div>
+    <!-- ==========================================
+         MODAL KIRIM WHATSAPP KE TEKNISI (ADMIN / SITE ADMIN)
+         ========================================== -->
+    <div id="modal-send-wa" class="modal-overlay" style="padding: 2mm;">
+      <div class="modal-card" style="max-width: 480px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; border-radius: 6px; padding: 12px; overflow: hidden; position: relative;">
+        <div class="modal-header flex-between align-center" style="padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+          <div class="modal-title" style="color:#25D366; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+            <i data-lucide="message-square"></i> Kirim WhatsApp Ke Teknisi
+          </div>
+          <button type="button" id="btn-close-wa-modal" class="btn-clear" style="font-size: 18px;">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 10px 0; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px;">
+          
+          <div class="form-group mb-0">
+            <label style="font-size: 11.5px; font-weight: 700; color: var(--text-main);">Pilih Teknisi Target</label>
+            <select id="wa-select-tech" class="custom-select" style="width: 100%; font-size: 12px; padding: 6px 8px; border-radius: 4px;"></select>
+          </div>
+
+          <div class="form-group mb-0">
+            <label style="font-size: 11.5px; font-weight: 700; color: var(--text-main);">Nomor WhatsApp Target (No HP / WA)</label>
+            <input type="text" id="wa-target-phone" class="custom-select" placeholder="Contoh: 081234567890 atau 6281234567890" style="width: 100%; font-size: 12px; padding: 6px 8px; border-radius: 4px;" />
+          </div>
+
+          <div class="form-group mb-0">
+            <label style="font-size: 11.5px; font-weight: 700; color: var(--text-main);">Preview Pesan WA (Gabungan Pending & Tagihan)</label>
+            <textarea id="wa-message-preview" rows="9" class="custom-select" style="width: 100%; font-size: 11px; padding: 8px; border-radius: 4px; font-family: inherit; resize: vertical; min-height: 140px;"></textarea>
+          </div>
+
+        </div>
+        <div class="modal-footer flex-between" style="padding-top: 8px; border-top: 1px solid var(--border-color); gap: 6px;">
+          <button type="button" id="btn-wa-direct-open" class="btn btn-secondary btn-sm" style="flex: 1; font-size: 11px; font-weight: 700; gap: 4px; border-radius: 4px;">
+            <i data-lucide="external-link"></i> Buka Direct WA
+          </button>
+          <button type="button" id="btn-wa-fonnte-send" class="btn btn-success btn-sm" style="flex: 1; font-size: 11px; font-weight: 700; gap: 4px; border-radius: 4px; background: #25D366; color: #fff; border: none;">
+            <i data-lucide="send"></i> Kirim via Fonte
+          </button>
+        </div>
+      </div>
     </div>
-
-
 
     <!-- Toast Notification Container -->
     <div id="toast-container" class="toast-wrapper"></div>

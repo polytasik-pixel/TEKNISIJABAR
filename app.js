@@ -4,6 +4,7 @@
 const GOOGLE_SHEET_ID = '1x6m_pQ_UUPMGUE5iGraaurOivSDmsJ7CKCr42rNWlBc';
 const USER_SPREADSHEET_ID = GOOGLE_SHEET_ID;
 const SPREADSHEET_ID = GOOGLE_SHEET_ID;
+const SITE_CODES = ['BDG', 'BDU', 'CRB', 'SKB', 'SBN', 'TSM'];
 
 const STORAGE_KEYS = {
   PROFILE: 'teknisi_profile_data',
@@ -14,7 +15,8 @@ const STORAGE_KEYS = {
   PIPO_CACHE: 'pipo_sheets_cache',
   FINISH_HISTORY: 'teknisi_finish_history',
   FINISH_SHEET_CACHE: 'finish_sheet_cache',
-  LAST_TAB: 'teknisi_last_active_tab'
+  LAST_TAB: 'teknisi_last_active_tab',
+  FONTE_TOKEN: 'teknisi_fonte_token'
 };
 
 let state = {
@@ -137,6 +139,7 @@ const DOM = {
   finishPageForm: document.getElementById('finish-page-form'),
   finishPageAll: document.getElementById('finish-page-all'),
   btnRefreshFinishAll: document.getElementById('btn-refresh-finish-all'),
+  btnDownloadFinishExcel: document.getElementById('btn-download-finish-excel'),
   syncIconFinishAll: document.getElementById('sync-icon-finish-all'),
   finishAllFilterDate: document.getElementById('finish-all-filter-date'),
   btnClearFinishFilterDate: document.getElementById('btn-clear-finish-filter-date'),
@@ -218,7 +221,22 @@ const DOM = {
   btnSelectModePartKembali: document.getElementById('btn-select-mode-part-kembali'),
   btnSelectModeTagihan: document.getElementById('btn-select-mode-tagihan'),
   pipoSearchInput: document.getElementById('input-search-pipo'),
-  pipoSearchClear: document.getElementById('btn-clear-search-pipo')
+  pipoSearchClear: document.getElementById('btn-clear-search-pipo'),
+
+  // Fonte & WhatsApp Elements
+  profileFonteToken: document.getElementById('profile-fonte-token'),
+  btnSaveFonteToken: document.getElementById('btn-save-fonte-token'),
+  cardFonteForm: document.getElementById('card-fonte-form'),
+  modalSendWa: document.getElementById('modal-send-wa'),
+  btnCloseWaModal: document.getElementById('btn-close-wa-modal'),
+  waSelectTech: document.getElementById('wa-select-tech'),
+  waTargetPhone: document.getElementById('wa-target-phone'),
+  waMessagePreview: document.getElementById('wa-message-preview'),
+  btnWaDirectOpen: document.getElementById('btn-wa-direct-open'),
+  btnWaFonnteSend: document.getElementById('btn-wa-fonnte-send'),
+  btnOpenWaPending: document.getElementById('btn-open-wa-pending'),
+  btnOpenWaPart: document.getElementById('btn-open-wa-part'),
+  btnOpenWaTagihan: document.getElementById('btn-open-wa-tagihan')
 };
 
 // ==========================================
@@ -411,6 +429,24 @@ function updateUIFromState() {
     DOM.profilePswToggle.disabled = true;
   }
 
+  if (DOM.profileFonteToken) {
+    DOM.profileFonteToken.value = localStorage.getItem(STORAGE_KEYS.FONTE_TOKEN) || '';
+  }
+
+  const { isAdminOrSiteAdmin } = getAdminOrSiteAdminStatus();
+  if (DOM.cardFonteForm) {
+    DOM.cardFonteForm.style.display = isAdminOrSiteAdmin ? 'block' : 'none';
+  }
+  if (DOM.btnOpenWaPending) {
+    DOM.btnOpenWaPending.style.display = isAdminOrSiteAdmin ? 'inline-flex' : 'none';
+  }
+  if (DOM.btnOpenWaPart) {
+    DOM.btnOpenWaPart.style.display = isAdminOrSiteAdmin ? 'inline-flex' : 'none';
+  }
+  if (DOM.btnOpenWaTagihan) {
+    DOM.btnOpenWaTagihan.style.display = isAdminOrSiteAdmin ? 'inline-flex' : 'none';
+  }
+
   document.documentElement.classList.toggle('is-admin', !!state.isAdmin);
   lucide.createIcons();
 }
@@ -458,6 +494,24 @@ function setupEventListeners() {
 
   // Logout Button
   if (DOM.btnLogout) DOM.btnLogout.addEventListener('click', handleLogout);
+
+  // Fonte & WA Listeners
+  if (DOM.btnSaveFonteToken) {
+    DOM.btnSaveFonteToken.addEventListener('click', () => {
+      if (!DOM.profileFonteToken) return;
+      const token = DOM.profileFonteToken.value.trim();
+      localStorage.setItem(STORAGE_KEYS.FONTE_TOKEN, token);
+      showToast('✅ Token Fonnte WhatsApp API berhasil disimpan!', 'success');
+    });
+  }
+  if (DOM.btnCloseWaModal) DOM.btnCloseWaModal.addEventListener('click', closeWaModal);
+  if (DOM.waSelectTech) DOM.waSelectTech.addEventListener('change', updateWaModalFields);
+  if (DOM.btnWaDirectOpen) DOM.btnWaDirectOpen.addEventListener('click', handleWaDirectOpen);
+  if (DOM.btnWaFonnteSend) DOM.btnWaFonnteSend.addEventListener('click', handleWaFonnteSend);
+
+  if (DOM.btnOpenWaPending) DOM.btnOpenWaPending.addEventListener('click', () => openWaModal());
+  if (DOM.btnOpenWaPart) DOM.btnOpenWaPart.addEventListener('click', () => openWaModal());
+  if (DOM.btnOpenWaTagihan) DOM.btnOpenWaTagihan.addEventListener('click', () => openWaModal());
 
   if (DOM.btnSelectModeTeknisi) {
     DOM.btnSelectModeTeknisi.addEventListener('click', () => {
@@ -543,6 +597,10 @@ function setupEventListeners() {
         if (DOM.syncIconFinishAll) DOM.syncIconFinishAll.classList.remove('spinning');
       }
     });
+  }
+
+  if (DOM.btnDownloadFinishExcel) {
+    DOM.btnDownloadFinishExcel.addEventListener('click', downloadFinishExcel);
   }
 
   if (DOM.finishAllFilterDate) {
@@ -841,6 +899,7 @@ async function fetchGoogleSheetsUsers() {
     const rows = extractMatrixFromGViz(table);
     const users = [];
     state.userAreaMap = {};
+    if (!state.userPhoneMap) state.userPhoneMap = {};
 
     for (let r = 0; r < rows.length; r++) {
       const row = rows[r];
@@ -850,6 +909,7 @@ async function fetchGoogleSheetsUsers() {
       const nama = (row[1] || '').trim();
       const psw = cleanNumberString(row[2]);
       const area = (row[3] || '').trim().toUpperCase(); // Column D: SITE / AREA
+      const phone = cleanNumberString(row[4]); // Column E: No WA / HP Teknisi
 
       if (nik.toUpperCase() === 'NIK' && psw.toUpperCase() === 'PSW') continue;
 
@@ -858,10 +918,17 @@ async function fetchGoogleSheetsUsers() {
           nik: nik || nama,
           nama: nama || nik,
           psw: psw,
-          area: area || 'JABAR'
+          area: area || 'JABAR',
+          phone: phone || ''
         });
-        if (nama) state.userAreaMap[cleanNameString(nama)] = area || 'JABAR';
-        if (nik) state.userAreaMap[cleanNameString(nik)] = area || 'JABAR';
+        if (nama) {
+          state.userAreaMap[cleanNameString(nama)] = area || 'JABAR';
+          if (phone) state.userPhoneMap[cleanNameString(nama)] = phone;
+        }
+        if (nik) {
+          state.userAreaMap[cleanNameString(nik)] = area || 'JABAR';
+          if (phone) state.userPhoneMap[cleanNumberString(nik)] = phone;
+        }
       }
     }
     return users;
@@ -873,7 +940,6 @@ async function fetchGoogleSheetsUsers() {
 
 async function syncUserProfileAreaFromSheet() {
   if (!state.isLoggedIn || !state.profile) return;
-  const SITE_CODES = ['BDG', 'BDU', 'CRB', 'SKB', 'SBN', 'TSM'];
   const nikUpper = (state.profile.nik || '').toUpperCase().trim();
   if (nikUpper === 'ADMIN' || SITE_CODES.includes(nikUpper)) {
     if (DOM.profileArea && SITE_CODES.includes(nikUpper)) DOM.profileArea.value = nikUpper;
@@ -924,7 +990,6 @@ async function handleLogin() {
   try {
     let authenticatedUser = null;
     const uUpper = username.toUpperCase().trim();
-    const SITE_CODES = ['BDG', 'BDU', 'CRB', 'SKB', 'SBN', 'TSM'];
 
     // 1. Global Admin Fallback
     if (uUpper === 'ADMIN' && password === '000') {
@@ -1844,6 +1909,85 @@ async function fetchFinishSheetData() {
   return { filledDatesSet, parsedAllRows };
 }
 
+function downloadFinishExcel() {
+  const currentNik = state.profile ? (state.profile.nik || '').toUpperCase().trim() : '';
+  const userAreaUpper = (state.profile ? (state.profile.area || '') : '').toUpperCase().trim();
+  const isSiteAdmin = SITE_CODES.includes(currentNik) || (state.isAdmin && SITE_CODES.includes(userAreaUpper)) || !!state.isSiteAdmin;
+  const isGlobalAdmin = currentNik === 'ADMIN';
+  const isAdminOrSiteAdmin = isGlobalAdmin || isSiteAdmin || state.isAdmin;
+
+  if (!isAdminOrSiteAdmin) {
+    showToast('⚠️ Akses unduh Excel hanya untuk Admin / Site Admin!', 'warning');
+    return;
+  }
+
+  const rows = state.finishParsedAllRows || [];
+  const siteCode = SITE_CODES.includes(currentNik) ? currentNik : userAreaUpper;
+
+  // Filter rows for current site admin's site (or all for global admin)
+  const siteRows = rows.filter(item => {
+    if (!item || !item.nama) return false;
+    if (isGlobalAdmin) return true;
+    return isMatchForCurrentRole(item.nama);
+  });
+
+  if (siteRows.length === 0) {
+    showToast('⚠️ Tidak ada data finish untuk diunduh.', 'warning');
+    return;
+  }
+
+  const headers = [
+    'Tanggal Laporan',
+    'Nama Teknisi',
+    'Case Outdoor',
+    'Finish Outdoor',
+    'Finish Indoor',
+    'WIP COMP',
+    'WIP TECH',
+    'Batal',
+    'Pengembalian (Antar)',
+    'Tidak Terkunjungi',
+    'Keterangan'
+  ];
+
+  const csvLines = [];
+  csvLines.push(headers.map(h => `"${h.replace(/"/g, '""')}"`).join(','));
+
+  siteRows.forEach(item => {
+    const row = [
+      item.tglLaporan || '',
+      item.nama || '',
+      item.caseOutdoor || 0,
+      item.finishOutdoor || 0,
+      item.finishIndoor || 0,
+      item.wipComp || 0,
+      item.wipTech || 0,
+      item.batal || 0,
+      item.antar || 0,
+      item.noVisit || 0,
+      item.ket || '-'
+    ];
+    csvLines.push(row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','));
+  });
+
+  const csvContent = '\uFEFF' + csvLines.join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const fileName = `Finish_Harian_${siteCode || 'ALL'}_${dateStr}.csv`;
+
+  link.setAttribute('href', url);
+  link.setAttribute('download', fileName);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+
+  showToast(`📥 Berhasil mengunduh ${siteRows.length} data Finish Harian (${fileName})`, 'success');
+}
+
 function loadFinishSheetCache() {
   try {
     const nikKey = (state.profile && state.profile.nik) ? String(state.profile.nik).trim() : 'guest';
@@ -1866,6 +2010,16 @@ function loadFinishSheetCache() {
 function renderFinishAllDataTab(parsedRows = null) {
   if (!DOM.finishPageAll) return;
   const rows = parsedRows || state.finishParsedAllRows || [];
+
+  const currentNik = state.profile ? (state.profile.nik || '').toUpperCase().trim() : '';
+  const userAreaUpper = (state.profile ? (state.profile.area || '') : '').toUpperCase().trim();
+  const isSiteAdmin = SITE_CODES.includes(currentNik) || (state.isAdmin && SITE_CODES.includes(userAreaUpper)) || !!state.isSiteAdmin;
+  const isGlobalAdmin = currentNik === 'ADMIN';
+  const isAdminOrSiteAdmin = isGlobalAdmin || isSiteAdmin || state.isAdmin;
+
+  if (DOM.btnDownloadFinishExcel) {
+    DOM.btnDownloadFinishExcel.style.display = isAdminOrSiteAdmin ? 'inline-flex' : 'none';
+  }
 
   const dateFilter = DOM.finishAllFilterDate ? DOM.finishAllFilterDate.value : '';
   const techFilter = DOM.finishAllFilterTech ? DOM.finishAllFilterTech.value.trim().toUpperCase() : '';
@@ -2311,8 +2465,6 @@ function isSameTechnicianName(sheetNama, targetNama) {
   }
   return false;
 }
-
-const SITE_CODES = ['BDG', 'BDU', 'CRB', 'SKB', 'SBN', 'TSM'];
 
 function getTechnicianRegisteredArea(techName) {
   if (!techName || !state.userAreaMap) return null;
@@ -3370,4 +3522,222 @@ function renderTagihanTab() {
   `).join('');
 
   lucide.createIcons();
+}
+
+// ==========================================
+// WHATSAPP & FONTE API INTEGRATION MODULE
+// ==========================================
+
+function getAdminOrSiteAdminStatus() {
+  const currentNik = state.profile ? (state.profile.nik || '').toUpperCase().trim() : '';
+  const userAreaUpper = (state.profile ? (state.profile.area || '') : '').toUpperCase().trim();
+  const isSiteAdmin = SITE_CODES.includes(currentNik) || (state.isAdmin && SITE_CODES.includes(userAreaUpper)) || !!state.isSiteAdmin;
+  const isGlobalAdmin = currentNik === 'ADMIN';
+  return { isGlobalAdmin, isSiteAdmin, isAdminOrSiteAdmin: isGlobalAdmin || isSiteAdmin || state.isAdmin };
+}
+
+function buildTechnicianWaMessage(targetTechName) {
+  if (!targetTechName) return '';
+  const pendingCases = (state.sheetsData.pendingCases || []).filter(item => matchTechName(item.teknisi, targetTechName));
+  const tagihanRows = (state.sheetsData.tagihanRows || []).filter(item => matchTechName(item.teknisi, targetTechName));
+  const partBelumKembali = (state.sheetsData.partBelumKembali || []).filter(item => matchTechName(item.teknisi, targetTechName));
+
+  let msg = `Halo *${targetTechName}*,\n\nBerikut ringkasan tugas & tagihan Anda:\n`;
+
+  if (pendingCases.length > 0) {
+    msg += `\n📋 *CASE PENDING* (${pendingCases.length} Case):\n`;
+    pendingCases.forEach((item, idx) => {
+      msg += `${idx + 1}. Case: *${item.no_case || '-'}* | Type: ${item.type || '-'} | Seri: ${item.seri || '-'} | SCL: ${item.scl || '-'} | Status: ${item.status || '-'}\n`;
+    });
+  }
+
+  if (tagihanRows.length > 0) {
+    msg += `\n💰 *TAGIHAN INVOICE* (${tagihanRows.length} Invoice):\n`;
+    tagihanRows.forEach((item, idx) => {
+      msg += `${idx + 1}. Inv: *${item.noInvoice || '-'}* | Cust: ${item.namaKonsumen || '-'} | Nominal: ${formatRupiah(item.jumlah)}\n`;
+    });
+  }
+
+  if (partBelumKembali.length > 0) {
+    msg += `\n📦 *PART BELUM KEMBALI* (${partBelumKembali.length} Item):\n`;
+    partBelumKembali.forEach((item, idx) => {
+      msg += `${idx + 1}. Part: *${item.noGudang || '-'}* | Qty: ${item.qty || '1'} | RSV: ${item.noReservasi || '-'}\n`;
+    });
+  }
+
+  if (pendingCases.length === 0 && tagihanRows.length === 0 && partBelumKembali.length === 0) {
+    msg += `\nSaat ini tidak ada laporan pending / tagihan terdaftar atas nama Anda.\n`;
+  }
+
+  msg += `\nMohon untuk segera ditindaklanjuti. Terima kasih! 🙏`;
+  return msg;
+}
+
+window.openWaModal = async function(preSelectedTechName = '') {
+  const { isAdminOrSiteAdmin } = getAdminOrSiteAdminStatus();
+  if (!isAdminOrSiteAdmin) {
+    showToast('⚠️ Akses Kirim WA hanya untuk Admin / Site Admin!', 'warning');
+    return;
+  }
+
+  if (!DOM.modalSendWa) {
+    DOM.modalSendWa = document.getElementById('modal-send-wa');
+  }
+  if (!DOM.modalSendWa) return;
+
+  // Fetch users list to populate state.userPhoneMap from sheet 'user' Column E
+  if (!state.userPhoneMap || Object.keys(state.userPhoneMap).length === 0) {
+    try { await fetchGoogleSheetsUsers(); } catch(e) {}
+  }
+
+  // Collect all unique technician names
+  const techSet = new Set();
+  (state.sheetsData.pendingCases || []).forEach(i => { if (i.teknisi && i.teknisi !== '-') techSet.add(i.teknisi); });
+  (state.sheetsData.tagihanRows || []).forEach(i => { if (i.teknisi && i.teknisi !== '-') techSet.add(i.teknisi); });
+  (state.sheetsData.partBelumKembali || []).forEach(i => { if (i.teknisi && i.teknisi !== '-') techSet.add(i.teknisi); });
+  (state.sheetsData.insentifRows || []).forEach(i => { if (i.nama && i.nama !== '-') techSet.add(i.nama); });
+
+  const techList = Array.from(techSet).sort();
+
+  if (DOM.waSelectTech) {
+    DOM.waSelectTech.innerHTML = techList.map(tName => {
+      const pCount = (state.sheetsData.pendingCases || []).filter(i => matchTechName(i.teknisi, tName)).length;
+      const tCount = (state.sheetsData.tagihanRows || []).filter(i => matchTechName(i.teknisi, tName)).length;
+      return `<option value="${escapeHtml(tName)}">${escapeHtml(tName)} (${pCount} Pending, ${tCount} Tagihan)</option>`;
+    }).join('');
+
+    if (preSelectedTechName && techList.includes(preSelectedTechName)) {
+      DOM.waSelectTech.value = preSelectedTechName;
+    }
+  }
+
+  updateWaModalFields();
+  DOM.modalSendWa.classList.add('active');
+};
+
+function closeWaModal() {
+  if (DOM.modalSendWa) DOM.modalSendWa.classList.remove('active');
+}
+
+function updateWaModalFields() {
+  if (!DOM.waSelectTech) return;
+  const selectedTech = DOM.waSelectTech.value;
+  if (!selectedTech) return;
+
+  // Look up phone from state.userPhoneMap (Sheet User Column E) first
+  let targetPhone = '';
+  if (state.userPhoneMap) {
+    for (let k in state.userPhoneMap) {
+      if (matchTechName(k, selectedTech) && state.userPhoneMap[k]) {
+        targetPhone = state.userPhoneMap[k];
+        break;
+      }
+    }
+  }
+
+  // Fallback to checking pendingCases if not found in userPhoneMap
+  if (!targetPhone) {
+    const matchedPending = (state.sheetsData.pendingCases || []).find(i => matchTechName(i.teknisi, selectedTech));
+    if (matchedPending && matchedPending.teknisi && /^08|^628/.test(matchedPending.teknisi)) {
+      targetPhone = matchedPending.teknisi;
+    }
+  }
+
+  if (!targetPhone) {
+    for (let item of (state.sheetsData.pendingCases || [])) {
+      if (matchTechName(item.teknisi, selectedTech)) {
+        if (/^08|^628/.test(item.no_case)) {
+          targetPhone = item.no_case;
+          break;
+        }
+      }
+    }
+  }
+
+  if (DOM.waTargetPhone) {
+    DOM.waTargetPhone.value = targetPhone;
+    DOM.waTargetPhone.setAttribute('data-last-tech', selectedTech);
+  }
+
+  const generatedMsg = buildTechnicianWaMessage(selectedTech);
+  if (DOM.waMessagePreview) {
+    DOM.waMessagePreview.value = generatedMsg;
+  }
+}
+
+async function handleWaFonnteSend() {
+  const targetPhone = DOM.waTargetPhone ? DOM.waTargetPhone.value.trim() : '';
+  const messageText = DOM.waMessagePreview ? DOM.waMessagePreview.value.trim() : '';
+  const token = localStorage.getItem(STORAGE_KEYS.FONTE_TOKEN) || '';
+
+  if (!token) {
+    showToast('⚠️ Token Fonnte belum diset. Silakan masukkan token Fonnte pada Pengaturan Profil Anda.', 'warning');
+    if (DOM.cardFonteForm) DOM.cardFonteForm.scrollIntoView({ behavior: 'smooth' });
+    return;
+  }
+
+  if (!targetPhone) {
+    showToast('⚠️ Mohon isi nomor HP / WhatsApp target!', 'warning');
+    if (DOM.waTargetPhone) DOM.waTargetPhone.focus();
+    return;
+  }
+
+  if (!messageText) {
+    showToast('⚠️ Pesan WA kosong.', 'warning');
+    return;
+  }
+
+  if (DOM.btnWaFonnteSend) DOM.btnWaFonnteSend.disabled = true;
+
+  try {
+    let cleanPhone = cleanNumberString(targetPhone);
+    if (cleanPhone.startsWith('0')) {
+      cleanPhone = '62' + cleanPhone.slice(1);
+    }
+
+    const formData = new FormData();
+    formData.append('target', cleanPhone);
+    formData.append('message', messageText);
+    formData.append('countryCode', '62');
+
+    const resp = await fetch('https://api.fonnte.com/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': token.trim()
+      },
+      body: formData
+    });
+
+    const json = await resp.json();
+    if (json && (json.status === true || json.status === 'true' || json.detail)) {
+      showToast('✅ Pesan WhatsApp berhasil dikirim via Fonnte API!', 'success');
+      closeWaModal();
+    } else {
+      throw new Error((json && json.reason) ? json.reason : (json && json.detail ? json.detail : 'Gagal mengirim via Fonnte API'));
+    }
+  } catch (err) {
+    showToast(`❌ Gagal Kirim WA: ${err.message}`, 'error');
+  } finally {
+    if (DOM.btnWaFonnteSend) DOM.btnWaFonnteSend.disabled = false;
+  }
+}
+
+function handleWaDirectOpen() {
+  const targetPhone = DOM.waTargetPhone ? DOM.waTargetPhone.value.trim() : '';
+  const messageText = DOM.waMessagePreview ? DOM.waMessagePreview.value.trim() : '';
+
+  if (!messageText) {
+    showToast('⚠️ Pesan WA kosong.', 'warning');
+    return;
+  }
+
+  let cleanPhone = cleanNumberString(targetPhone);
+  if (cleanPhone.startsWith('0')) {
+    cleanPhone = '62' + cleanPhone.slice(1);
+  }
+
+  const encodedMsg = encodeURIComponent(messageText);
+  const waUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodedMsg}` : `https://api.whatsapp.com/send?text=${encodedMsg}`;
+  window.open(waUrl, '_blank');
+  showToast('📲 Membuka WhatsApp...', 'info');
 }

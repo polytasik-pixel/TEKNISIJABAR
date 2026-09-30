@@ -220,24 +220,28 @@ html[data-active-tab="tab-pending"] .nav-item[data-mode="teknisi"],
 html[data-active-tab="tab-performa"] .nav-item[data-mode="teknisi"],
 html[data-active-tab="tab-notif"] .nav-item[data-mode="teknisi"],
 html[data-active-tab="tab-part-kembali"] .nav-item[data-mode="teknisi"],
-html[data-active-tab="tab-tagihan"] .nav-item[data-mode="teknisi"] {
+html[data-active-tab="tab-tagihan"] .nav-item[data-mode="teknisi"],
+html[data-current-mode="teknisi"] .nav-item[data-mode="teknisi"] {
   display: flex !important;
 }
 
 /* Mode Scan Nav Items */
 html[data-active-tab="tab-scan"] .nav-item[data-mode="scan"],
-html[data-active-tab="tab-history"] .nav-item[data-mode="scan"] {
+html[data-active-tab="tab-history"] .nav-item[data-mode="scan"],
+html[data-current-mode="scan"] .nav-item[data-mode="scan"] {
   display: flex !important;
 }
 
 /* Mode Finish Nav Items */
 html[data-active-tab="tab-finish"] .nav-item[data-mode="finish"],
-html[data-active-tab="tab-finish-all"] .nav-item[data-mode="finish"] {
+html[data-active-tab="tab-finish-all"] .nav-item[data-mode="finish"],
+html[data-current-mode="finish"] .nav-item[data-mode="finish"] {
   display: flex !important;
 }
 
 /* Mode PIPO Nav Items */
-html[data-active-tab="tab-pipo"] .nav-item[data-mode="pipo"] {
+html[data-active-tab="tab-pipo"] .nav-item[data-mode="pipo"],
+html[data-current-mode="pipo"] .nav-item[data-mode="pipo"] {
   display: flex !important;
 }
 
@@ -246,22 +250,11 @@ html[data-active-tab]:not([data-active-tab="tab-menu"]) .nav-item[data-mode="all
   display: flex !important;
 }
 
-/* Hide unselected nav items per mode before JS runs */
-html[data-active-tab="tab-pending"] .nav-item:not([data-mode="teknisi"]):not([data-mode="all"]),
-html[data-active-tab="tab-performa"] .nav-item:not([data-mode="teknisi"]):not([data-mode="all"]),
-html[data-active-tab="tab-notif"] .nav-item:not([data-mode="teknisi"]):not([data-mode="all"]),
-html[data-active-tab="tab-part-kembali"] .nav-item:not([data-mode="teknisi"]):not([data-mode="all"]),
-html[data-active-tab="tab-tagihan"] .nav-item:not([data-mode="teknisi"]):not([data-mode="all"]),
-html[data-active-tab="tab-finish"] .nav-item:not([data-mode="finish"]):not([data-mode="all"]),
-html[data-active-tab="tab-finish-all"] .nav-item:not([data-mode="finish"]):not([data-mode="all"]),
-html[data-active-tab="tab-scan"] .nav-item:not([data-mode="scan"]):not([data-mode="all"]),
-html[data-active-tab="tab-history"] .nav-item:not([data-mode="scan"]):not([data-mode="all"]),
-html[data-active-tab="tab-pipo"] .nav-item:not([data-mode="pipo"]):not([data-mode="all"]) {
-  display: none !important;
-}
-
-/* When Profile Tab is active (tab-profile), ONLY show Menu Utama nav item in bottom bar */
-html[data-active-tab="tab-profile"] .nav-item:not([data-target="tab-menu"]) {
+/* Hide unselected nav items per mode */
+html[data-current-mode="teknisi"] .nav-item:not([data-mode="teknisi"]):not([data-mode="all"]),
+html[data-current-mode="scan"] .nav-item:not([data-mode="scan"]):not([data-mode="all"]),
+html[data-current-mode="finish"] .nav-item:not([data-mode="finish"]):not([data-mode="all"]),
+html[data-current-mode="pipo"] .nav-item:not([data-mode="pipo"]):not([data-mode="all"]) {
   display: none !important;
 }
 
@@ -2632,8 +2625,9 @@ input:checked + .slider:before { transform: translateX(20px); }
 #tab-pipo.tab-content.active {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 115px);
-  height: calc(100dvh - 115px);
+  flex: 1;
+  height: 100%;
+  min-height: 0;
   overflow: hidden !important;
   box-sizing: border-box;
 }
