@@ -234,6 +234,9 @@ const DOM = {
   waMessagePreview: document.getElementById('wa-message-preview'),
   btnWaDirectOpen: document.getElementById('btn-wa-direct-open'),
   btnWaFonnteSend: document.getElementById('btn-wa-fonnte-send'),
+  btnWaBatchSend: document.getElementById('btn-wa-batch-send'),
+  waModalSiteBadge: document.getElementById('wa-modal-site-badge'),
+  waModalSiteTitle: document.getElementById('wa-modal-site-title'),
   btnOpenWaPending: document.getElementById('btn-open-wa-pending'),
   btnOpenWaPart: document.getElementById('btn-open-wa-part'),
   btnOpenWaTagihan: document.getElementById('btn-open-wa-tagihan')
@@ -508,10 +511,11 @@ function setupEventListeners() {
   if (DOM.waSelectTech) DOM.waSelectTech.addEventListener('change', updateWaModalFields);
   if (DOM.btnWaDirectOpen) DOM.btnWaDirectOpen.addEventListener('click', handleWaDirectOpen);
   if (DOM.btnWaFonnteSend) DOM.btnWaFonnteSend.addEventListener('click', handleWaFonnteSend);
+  if (DOM.btnWaBatchSend) DOM.btnWaBatchSend.addEventListener('click', handleWaBatchSend);
 
-  if (DOM.btnOpenWaPending) DOM.btnOpenWaPending.addEventListener('click', () => openWaModal());
-  if (DOM.btnOpenWaPart) DOM.btnOpenWaPart.addEventListener('click', () => openWaModal());
-  if (DOM.btnOpenWaTagihan) DOM.btnOpenWaTagihan.addEventListener('click', () => openWaModal());
+  if (DOM.btnOpenWaPending) DOM.btnOpenWaPending.addEventListener('click', () => openSendWaConfirmModal());
+  if (DOM.btnOpenWaPart) DOM.btnOpenWaPart.addEventListener('click', () => openSendWaConfirmModal());
+  if (DOM.btnOpenWaTagihan) DOM.btnOpenWaTagihan.addEventListener('click', () => openSendWaConfirmModal());
 
   if (DOM.btnSelectModeTeknisi) {
     DOM.btnSelectModeTeknisi.addEventListener('click', () => {
@@ -842,6 +846,8 @@ async function handleConfirmModalOk() {
     performLogout();
   } else if (currentAction === 'clearCache') {
     executeClearAppCache();
+  } else if (currentAction === 'sendWaBatch') {
+    await executeSendWaBatch();
   }
 }
 
@@ -2758,17 +2764,25 @@ async function fetchGoogleSheetsData() {
 
     syncUserProfileAreaFromSheet();
 
-    // 0. Direct Cell Extraction for Timestamp from Col AY (Index 50)
-    let pendingTimestamp = '';
-    if (rowsData && rowsData.length > 1 && rowsData[1] && rowsData[1][50]) {
-      pendingTimestamp = String(rowsData[1][50]).trim(); // Col AY (Index 50)
-    }
-    if (!pendingTimestamp || !pendingTimestamp.includes('Update')) {
-      pendingTimestamp = 'Update Tanggal ' + new Date().toLocaleDateString('id-ID');
-    }
-    let performaTimestamp = pendingTimestamp;
-    let partKembaliTimestamp = pendingTimestamp;
-    let tagihanTimestamp = pendingTimestamp;
+    // 0. Direct Cell Extraction for Timestamps from Col AY (Index 50)
+    // AY2 (Row index 1) = PAGE PENDING
+    // AY3 (Row index 2) = PAGE PERFORMA
+    // AY4 (Row index 3) = PART BELUM KEMBALI
+    // AY5 (Row index 4) = PAGE TAGIHAN
+
+    const defaultTs = 'Update Tanggal ' + new Date().toLocaleDateString('id-ID');
+
+    let pendingTimestamp = (rowsData && rowsData.length > 1 && rowsData[1] && rowsData[1][50]) ? String(rowsData[1][50]).trim() : '';
+    if (!pendingTimestamp) pendingTimestamp = defaultTs;
+
+    let performaTimestamp = (rowsData && rowsData.length > 2 && rowsData[2] && rowsData[2][50]) ? String(rowsData[2][50]).trim() : '';
+    if (!performaTimestamp) performaTimestamp = pendingTimestamp || defaultTs;
+
+    let partKembaliTimestamp = (rowsData && rowsData.length > 3 && rowsData[3] && rowsData[3][50]) ? String(rowsData[3][50]).trim() : '';
+    if (!partKembaliTimestamp) partKembaliTimestamp = pendingTimestamp || defaultTs;
+
+    let tagihanTimestamp = (rowsData && rowsData.length > 4 && rowsData[4] && rowsData[4][50]) ? String(rowsData[4][50]).trim() : '';
+    if (!tagihanTimestamp) tagihanTimestamp = pendingTimestamp || defaultTs;
 
     // 1. Pending Cases (Sheet DATA, Row 1+, Col AZ to BH / Col Index 51 to 59)
     const pendingCases = [];
@@ -3020,8 +3034,13 @@ function renderSheetUpdateInfo() {
   else if (state.activeTab === 'tab-part-kembali') activeTs = partKembaliTs;
   else if (state.activeTab === 'tab-tagihan') activeTs = tagihanTs;
 
+  let displayTs = activeTs;
+  if (displayTs && !displayTs.toLowerCase().includes('update')) {
+    displayTs = 'Update ' + displayTs;
+  }
+
   if (DOM.sheetZ2Timestamp) {
-    DOM.sheetZ2Timestamp.textContent = activeTs;
+    DOM.sheetZ2Timestamp.textContent = displayTs;
   }
 }
 
@@ -3440,7 +3459,7 @@ function renderPartKembaliTab() {
           </div>
         </div>
         <div style="flex-shrink:0;">
-          <span style="font-size:11.5px; font-weight:800; color:var(--primary); background:rgba(16, 185, 129, 0.15); padding:3px 8px; border-radius:var(--radius-sm); border:1px solid rgba(16, 185, 129, 0.3); display:inline-block;">
+          <span style="font-size:9.5px; font-weight:800; color:var(--primary); background:rgba(16, 185, 129, 0.15); padding:2px 6px; border-radius:var(--radius-sm); border:1px solid rgba(16, 185, 129, 0.3); display:inline-block;">
             Qty: ${escapeHtml(item.qty)}
           </span>
         </div>
@@ -3514,7 +3533,7 @@ function renderTagihanTab() {
         </div>
       </div>
       <div style="display:flex; align-items:center; flex-shrink:0;">
-        <span style="font-size:12px; font-weight:800; color:var(--warning); background:rgba(245, 158, 11, 0.15); padding:5px 10px; border-radius:var(--radius-sm); border:1px solid rgba(245, 158, 11, 0.3);">
+        <span style="font-size:10px; font-weight:800; color:var(--warning); background:rgba(245, 158, 11, 0.15); padding:3px 7px; border-radius:var(--radius-sm); border:1px solid rgba(245, 158, 11, 0.3);">
           ${formatRupiah(item.jumlah)}
         </span>
       </div>
@@ -3536,44 +3555,302 @@ function getAdminOrSiteAdminStatus() {
   return { isGlobalAdmin, isSiteAdmin, isAdminOrSiteAdmin: isGlobalAdmin || isSiteAdmin || state.isAdmin };
 }
 
-function buildTechnicianWaMessage(targetTechName) {
+function isTechnicianMatch(sheetTech, targetTech) {
+  if (!sheetTech || !targetTech) return false;
+  const sClean = cleanNameString(sheetTech);
+  const tClean = cleanNameString(targetTech);
+  if (!sClean || !tClean) return false;
+  if (sClean === tClean) return true;
+
+  const sWords = sClean.split(' ').filter(w => w.length >= 2);
+  const tWords = tClean.split(' ').filter(w => w.length >= 2);
+
+  if (sWords.length >= 2 && tWords.length >= 2) {
+    let matchCount = 0;
+    for (let tw of tWords) {
+      if (sWords.includes(tw)) matchCount++;
+    }
+    const minRequired = Math.min(sWords.length, tWords.length, 2);
+    return matchCount >= minRequired;
+  }
+
+  if (sWords.length === 1 && tWords.length >= 1) {
+    return tWords.includes(sWords[0]);
+  }
+  if (tWords.length === 1 && sWords.length >= 1) {
+    return sWords.includes(tWords[0]);
+  }
+
+  return false;
+}
+
+function buildTechnicianWaMessage(targetTechName, contextTab = '') {
   if (!targetTechName) return '';
-  const pendingCases = (state.sheetsData.pendingCases || []).filter(item => matchTechName(item.teknisi, targetTechName));
-  const tagihanRows = (state.sheetsData.tagihanRows || []).filter(item => matchTechName(item.teknisi, targetTechName));
-  const partBelumKembali = (state.sheetsData.partBelumKembali || []).filter(item => matchTechName(item.teknisi, targetTechName));
+  const activeTab = contextTab || state.activeTab || 'tab-pending';
 
-  let msg = `Halo *${targetTechName}*,\n\nBerikut ringkasan tugas & tagihan Anda:\n`;
+  const pendingCases = (state.sheetsData.pendingCases || []).filter(item => isTechnicianMatch(item.teknisi, targetTechName));
+  const tagihanRows = (state.sheetsData.tagihanRows || []).filter(item => isTechnicianMatch(item.teknisi, targetTechName));
+  const partBelumKembali = (state.sheetsData.partBelumKembali || []).filter(item => isTechnicianMatch(item.teknisi, targetTechName));
 
-  if (pendingCases.length > 0) {
-    msg += `\n📋 *CASE PENDING* (${pendingCases.length} Case):\n`;
-    pendingCases.forEach((item, idx) => {
-      msg += `${idx + 1}. Case: *${item.no_case || '-'}* | Type: ${item.type || '-'} | Seri: ${item.seri || '-'} | SCL: ${item.scl || '-'} | Status: ${item.status || '-'}\n`;
-    });
-  }
+  let msg = `Halo *${targetTechName}*,\n\n`;
 
-  if (tagihanRows.length > 0) {
-    msg += `\n💰 *TAGIHAN INVOICE* (${tagihanRows.length} Invoice):\n`;
-    tagihanRows.forEach((item, idx) => {
-      msg += `${idx + 1}. Inv: *${item.noInvoice || '-'}* | Cust: ${item.namaKonsumen || '-'} | Nominal: ${formatRupiah(item.jumlah)}\n`;
-    });
-  }
-
-  if (partBelumKembali.length > 0) {
-    msg += `\n📦 *PART BELUM KEMBALI* (${partBelumKembali.length} Item):\n`;
-    partBelumKembali.forEach((item, idx) => {
-      msg += `${idx + 1}. Part: *${item.noGudang || '-'}* | Qty: ${item.qty || '1'} | RSV: ${item.noReservasi || '-'}\n`;
-    });
-  }
-
-  if (pendingCases.length === 0 && tagihanRows.length === 0 && partBelumKembali.length === 0) {
-    msg += `\nSaat ini tidak ada laporan pending / tagihan terdaftar atas nama Anda.\n`;
+  if (activeTab === 'tab-tagihan') {
+    msg += `Berikut rincian *TAGIHAN INVOICE* Anda:\n`;
+    if (tagihanRows.length > 0) {
+      tagihanRows.forEach((item, idx) => {
+        msg += `${idx + 1}. Inv: *${item.noInvoice || '-'}* | Cust: ${item.namaKonsumen || '-'} | Nominal: ${formatRupiah(item.jumlah)}\n`;
+      });
+    } else {
+      msg += `Saat ini tidak ada tagihan terdaftar atas nama Anda.\n`;
+    }
+  } else if (activeTab === 'tab-part-kembali') {
+    msg += `Berikut rincian *PART BEKAS / BELUM KEMBALI* Anda:\n`;
+    if (partBelumKembali.length > 0) {
+      partBelumKembali.forEach((item, idx) => {
+        msg += `${idx + 1}. Part: *${item.noGudang || '-'}* | Qty: ${item.qty || '1'} | RSV: ${item.noReservasi || '-'}\n`;
+      });
+    } else {
+      msg += `Saat ini tidak ada part bekas terdaftar atas nama Anda.\n`;
+    }
+  } else if (activeTab === 'tab-pending') {
+    msg += `Berikut rincian *CASE PENDING* Anda:\n`;
+    if (pendingCases.length > 0) {
+      pendingCases.forEach((item, idx) => {
+        msg += `${idx + 1}. Case: *${item.no_case || '-'}* | Type: ${item.type || '-'} | Seri: ${item.seri || '-'} | SCL: ${item.scl || '-'} | Status: ${item.status || '-'}\n`;
+      });
+    } else {
+      msg += `Saat ini tidak ada case pending terdaftar atas nama Anda.\n`;
+    }
+  } else {
+    msg += `Berikut ringkasan tugas & tagihan Anda:\n`;
+    if (pendingCases.length > 0) {
+      msg += `\n📋 *CASE PENDING* (${pendingCases.length} Case):\n`;
+      pendingCases.forEach((item, idx) => {
+        msg += `${idx + 1}. Case: *${item.no_case || '-'}* | Type: ${item.type || '-'} | Seri: ${item.seri || '-'} | SCL: ${item.scl || '-'}\n`;
+      });
+    }
+    if (tagihanRows.length > 0) {
+      msg += `\n💰 *TAGIHAN INVOICE* (${tagihanRows.length} Invoice):\n`;
+      tagihanRows.forEach((item, idx) => {
+        msg += `${idx + 1}. Inv: *${item.noInvoice || '-'}* | Cust: ${item.namaKonsumen || '-'} | Nominal: ${formatRupiah(item.jumlah)}\n`;
+      });
+    }
+    if (partBelumKembali.length > 0) {
+      msg += `\n📦 *PART BELUM KEMBALI* (${partBelumKembali.length} Item):\n`;
+      partBelumKembali.forEach((item, idx) => {
+        msg += `${idx + 1}. Part: *${item.noGudang || '-'}* | Qty: ${item.qty || '1'}\n`;
+      });
+    }
   }
 
   msg += `\nMohon untuk segera ditindaklanjuti. Terima kasih! 🙏`;
   return msg;
 }
 
-window.openWaModal = async function(preSelectedTechName = '') {
+function isTechInSite(tName, targetSite) {
+  if (!targetSite || targetSite === 'JABAR' || targetSite === 'ADMIN') return true;
+  const targetUpper = targetSite.toUpperCase().trim();
+
+  // 1. Registered Area in User Sheet
+  const regArea = getTechnicianRegisteredArea(tName);
+  if (regArea && regArea.toUpperCase().trim() === targetUpper) return true;
+
+  // 2. Pending cases
+  const pCase = (state.sheetsData.pendingCases || []).find(i => isTechnicianMatch(i.teknisi, tName));
+  if (pCase && (pCase.site || pCase.area) && String(pCase.site || pCase.area).toUpperCase().trim() === targetUpper) return true;
+
+  // 3. Tagihan rows
+  const tRow = (state.sheetsData.tagihanRows || []).find(i => isTechnicianMatch(i.teknisi, tName));
+  if (tRow && (tRow.site || tRow.area) && String(tRow.site || tRow.area).toUpperCase().trim() === targetUpper) return true;
+
+  // 4. Part bekas
+  const pRow = (state.sheetsData.partBelumKembali || []).find(i => isTechnicianMatch(i.teknisi, tName));
+  if (pRow && (pRow.site || pRow.area) && String(pRow.site || pRow.area).toUpperCase().trim() === targetUpper) return true;
+
+  return false;
+}
+
+function openSendWaConfirmModal() {
+  const { isAdminOrSiteAdmin } = getAdminOrSiteAdminStatus();
+  if (!isAdminOrSiteAdmin) {
+    showToast('⚠️ Akses Kirim WA hanya untuk Admin / Site Admin!', 'warning');
+    return;
+  }
+
+  const token = localStorage.getItem(STORAGE_KEYS.FONTE_TOKEN) || '';
+  if (!token) {
+    showToast('⚠️ Token Fonnte belum diset. Silakan masukkan token Fonnte pada Pengaturan Akun Profil Anda.', 'warning');
+    switchTab('tab-profile');
+    if (DOM.cardFonteForm) {
+      DOM.cardFonteForm.style.display = 'block';
+      DOM.cardFonteForm.scrollIntoView({ behavior: 'smooth' });
+    }
+    return;
+  }
+
+  const currentNik = state.profile ? (state.profile.nik || '').toUpperCase().trim() : '';
+  const currentArea = state.profile ? (state.profile.area || '').toUpperCase().trim() : '';
+  const isGlobalAdmin = currentNik === 'ADMIN';
+  const userSite = SITE_CODES.includes(currentNik) ? currentNik : (SITE_CODES.includes(currentArea) ? currentArea : '');
+
+  const activeTab = state.activeTab || 'tab-pending';
+  let menuLabel = 'Case Pending';
+
+  // Collect technician names ONLY for technicians who have data IN THIS SPECIFIC ACTIVE TAB
+  const activeTechSet = new Set();
+
+  if (activeTab === 'tab-tagihan') {
+    menuLabel = 'Tagihan Invoice';
+    (state.sheetsData.tagihanRows || []).forEach(i => { if (i.teknisi && i.teknisi !== '-') activeTechSet.add(i.teknisi); });
+  } else if (activeTab === 'tab-part-kembali') {
+    menuLabel = 'Part Bekas';
+    (state.sheetsData.partBelumKembali || []).forEach(i => { if (i.teknisi && i.teknisi !== '-') activeTechSet.add(i.teknisi); });
+  } else {
+    menuLabel = 'Case Pending';
+    (state.sheetsData.pendingCases || []).forEach(i => { if (i.teknisi && i.teknisi !== '-') activeTechSet.add(i.teknisi); });
+  }
+
+  const techList = Array.from(activeTechSet).sort();
+
+  // Filter technicians matching userSite (e.g. TSM, BDG, BDU, etc.)
+  let siteTechList = techList;
+  if (!isGlobalAdmin && userSite && userSite !== 'JABAR') {
+    siteTechList = techList.filter(tName => isTechInSite(tName, userSite));
+  }
+
+  // Ensure each tech in siteTechList really has active items (>0) in THIS tab
+  siteTechList = siteTechList.filter(tName => {
+    if (activeTab === 'tab-tagihan') {
+      return (state.sheetsData.tagihanRows || []).filter(i => isTechnicianMatch(i.teknisi, tName)).length > 0;
+    } else if (activeTab === 'tab-part-kembali') {
+      return (state.sheetsData.partBelumKembali || []).filter(i => isTechnicianMatch(i.teknisi, tName)).length > 0;
+    } else {
+      return (state.sheetsData.pendingCases || []).filter(i => isTechnicianMatch(i.teknisi, tName)).length > 0;
+    }
+  });
+
+  if (siteTechList.length === 0) {
+    showToast(`⚠️ Tidak ada teknisi yang memiliki data ${menuLabel} di site ini.`, 'info');
+    return;
+  }
+
+  state.targetSiteWaTechs = siteTechList;
+  state.targetSiteName = (!isGlobalAdmin && userSite && userSite !== 'JABAR') ? userSite : 'ALL';
+  state.targetWaContextTab = activeTab;
+  state.modalAction = 'sendWaBatch';
+
+  const techNamesStr = siteTechList.length <= 3 ? ` (${siteTechList.join(', ')})` : '';
+
+  if (DOM.modalConfirmTitle) DOM.modalConfirmTitle.innerHTML = `<i data-lucide="message-square"></i> Konfirmasi Kirim WA ${menuLabel}`;
+  if (DOM.modalConfirmMsg) DOM.modalConfirmMsg.textContent = `Apakah Anda Yakin Ingin Mengirimkan Pesan WhatsApp ${menuLabel} ke ${siteTechList.length} Teknisi${techNamesStr} di Site [${state.targetSiteName}]?`;
+  if (DOM.modalConfirmOkText) DOM.modalConfirmOkText.textContent = 'Ya, Kirim WA Sekarang';
+  if (DOM.modalConfirm) DOM.modalConfirm.classList.add('active');
+  if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons();
+}
+window.openSendWaConfirmModal = openSendWaConfirmModal;
+
+async function executeSendWaBatch() {
+  const token = localStorage.getItem(STORAGE_KEYS.FONTE_TOKEN) || '';
+  if (!token) {
+    showToast('⚠️ Token Fonnte belum diset. Silakan masukkan token Fonnte pada Pengaturan Akun Profil Anda.', 'warning');
+    return;
+  }
+
+  const techList = state.targetSiteWaTechs || [];
+  const contextTab = state.targetWaContextTab || state.activeTab || 'tab-pending';
+
+  if (techList.length === 0) {
+    showToast('⚠️ Tidak ada teknisi yang memiliki data pada menu ini!', 'warning');
+    return;
+  }
+
+  if (!state.userPhoneMap || Object.keys(state.userPhoneMap).length === 0) {
+    try {
+      await fetchGoogleSheetsUsers();
+    } catch(e) {}
+  }
+
+  showToast(`🚀 Memulai pengiriman WhatsApp ke ${techList.length} teknisi Site ${state.targetSiteName || ''}...`, 'info');
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (let i = 0; i < techList.length; i++) {
+    const techName = techList[i];
+
+    // Filter check based on contextTab
+    if (contextTab === 'tab-tagihan') {
+      const tCount = (state.sheetsData.tagihanRows || []).filter(item => isTechnicianMatch(item.teknisi, techName)).length;
+      if (tCount === 0) continue;
+    } else if (contextTab === 'tab-part-kembali') {
+      const pbCount = (state.sheetsData.partBelumKembali || []).filter(item => isTechnicianMatch(item.teknisi, techName)).length;
+      if (pbCount === 0) continue;
+    } else if (contextTab === 'tab-pending') {
+      const pCount = (state.sheetsData.pendingCases || []).filter(item => isTechnicianMatch(item.teknisi, techName)).length;
+      if (pCount === 0) continue;
+    }
+
+    let phone = '';
+    if (state.userPhoneMap) {
+      for (let k in state.userPhoneMap) {
+        if (isTechnicianMatch(k, techName) && state.userPhoneMap[k]) {
+          phone = state.userPhoneMap[k];
+          break;
+        }
+      }
+    }
+
+    if (!phone) {
+      const matchedPending = (state.sheetsData.pendingCases || []).find(item => isTechnicianMatch(item.teknisi, techName));
+      if (matchedPending && /^08|^628/.test(matchedPending.teknisi)) phone = matchedPending.teknisi;
+    }
+
+    if (!phone) {
+      showToast(`⚠️ [${i + 1}/${techList.length}] ${techName}: Nomor HP/WA tidak ditemukan di Sheet user (Kolom E)`, 'warning');
+      failCount++;
+      continue;
+    }
+
+    const msg = buildTechnicianWaMessage(techName, contextTab);
+    if (!msg) {
+      failCount++;
+      continue;
+    }
+
+    let cleanPhone = cleanNumberString(phone);
+    if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+
+    try {
+      const formData = new FormData();
+      formData.append('target', cleanPhone);
+      formData.append('message', msg);
+      formData.append('countryCode', '62');
+
+      const resp = await fetch('https://api.fonnte.com/send', {
+        method: 'POST',
+        headers: { 'Authorization': token.trim() },
+        body: formData
+      });
+      const json = await resp.json();
+      if (json && (json.status === true || json.status === 'true' || json.detail)) {
+        successCount++;
+        showToast(`✅ [${i + 1}/${techList.length}] WA terkirim ke ${techName}`, 'success');
+      } else {
+        failCount++;
+        showToast(`❌ [${i + 1}/${techList.length}] Gagal kirim ke ${techName}: ${json.reason || json.detail || 'Error'}`, 'error');
+      }
+    } catch(err) {
+      failCount++;
+      showToast(`❌ [${i + 1}/${techList.length}] Gagal kirim ke ${techName}: ${err.message}`, 'error');
+    }
+
+    await new Promise(r => setTimeout(r, 600));
+  }
+
+  showToast(`🎉 Selesai! ${successCount} pesan WA terkirim, ${failCount} gagal/tanpa no HP.`, 'info');
+}
+
+window.openWaModal = function(preSelectedTechName = '') {
   const { isAdminOrSiteAdmin } = getAdminOrSiteAdminStatus();
   if (!isAdminOrSiteAdmin) {
     showToast('⚠️ Akses Kirim WA hanya untuk Admin / Site Admin!', 'warning');
@@ -3585,10 +3862,10 @@ window.openWaModal = async function(preSelectedTechName = '') {
   }
   if (!DOM.modalSendWa) return;
 
-  // Fetch users list to populate state.userPhoneMap from sheet 'user' Column E
-  if (!state.userPhoneMap || Object.keys(state.userPhoneMap).length === 0) {
-    try { await fetchGoogleSheetsUsers(); } catch(e) {}
-  }
+  const currentNik = state.profile ? (state.profile.nik || '').toUpperCase().trim() : '';
+  const currentArea = state.profile ? (state.profile.area || '').toUpperCase().trim() : '';
+  const isGlobalAdmin = currentNik === 'ADMIN';
+  const userSite = SITE_CODES.includes(currentNik) ? currentNik : (SITE_CODES.includes(currentArea) ? currentArea : '');
 
   // Collect all unique technician names
   const techSet = new Set();
@@ -3599,20 +3876,44 @@ window.openWaModal = async function(preSelectedTechName = '') {
 
   const techList = Array.from(techSet).sort();
 
+  // Filter technicians matching userSite (e.g. TSM, BDG, BDU, etc.)
+  let siteTechList = techList;
+  if (!isGlobalAdmin && userSite && userSite !== 'JABAR') {
+    siteTechList = techList.filter(tName => isTechInSite(tName, userSite));
+    if (siteTechList.length === 0) siteTechList = techList; // Fallback if filter returns 0
+  }
+
+  if (DOM.waModalSiteBadge) {
+    DOM.waModalSiteBadge.textContent = (!isGlobalAdmin && userSite && userSite !== 'JABAR') ? `Site Filter: ${userSite}` : 'Site Filter: SEMUA';
+  }
+  if (DOM.waModalSiteTitle) {
+    DOM.waModalSiteTitle.innerHTML = `<i data-lucide="message-square"></i> Kirim WA Ke Teknisi ${(!isGlobalAdmin && userSite && userSite !== 'JABAR') ? '(' + userSite + ')' : ''}`;
+  }
+
   if (DOM.waSelectTech) {
-    DOM.waSelectTech.innerHTML = techList.map(tName => {
+    DOM.waSelectTech.innerHTML = siteTechList.map(tName => {
       const pCount = (state.sheetsData.pendingCases || []).filter(i => matchTechName(i.teknisi, tName)).length;
       const tCount = (state.sheetsData.tagihanRows || []).filter(i => matchTechName(i.teknisi, tName)).length;
       return `<option value="${escapeHtml(tName)}">${escapeHtml(tName)} (${pCount} Pending, ${tCount} Tagihan)</option>`;
     }).join('');
 
-    if (preSelectedTechName && techList.includes(preSelectedTechName)) {
+    if (preSelectedTechName && siteTechList.includes(preSelectedTechName)) {
       DOM.waSelectTech.value = preSelectedTechName;
     }
   }
 
-  updateWaModalFields();
+  // Open modal immediately (Instant 0ms popup)
   DOM.modalSendWa.classList.add('active');
+  if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons();
+
+  updateWaModalFields();
+
+  // Background fetch user phone map from sheet 'user' Column E if not loaded yet
+  if (!state.userPhoneMap || Object.keys(state.userPhoneMap).length === 0) {
+    fetchGoogleSheetsUsers().then(() => {
+      updateWaModalFields();
+    }).catch(() => {});
+  }
 };
 
 function closeWaModal() {
@@ -3722,6 +4023,97 @@ async function handleWaFonnteSend() {
   }
 }
 
+async function handleWaBatchSend() {
+  const token = localStorage.getItem(STORAGE_KEYS.FONTE_TOKEN) || '';
+  if (!token) {
+    showToast('⚠️ Token Fonnte belum diset. Silakan masukkan token Fonnte pada Pengaturan Profil Anda.', 'warning');
+    if (DOM.cardFonteForm) DOM.cardFonteForm.scrollIntoView({ behavior: 'smooth' });
+    return;
+  }
+
+  if (!DOM.waSelectTech || !DOM.waSelectTech.options || DOM.waSelectTech.options.length === 0) {
+    showToast('⚠️ Tidak ada teknisi terdaftar di site ini!', 'warning');
+    return;
+  }
+
+  const options = Array.from(DOM.waSelectTech.options).map(opt => opt.value);
+  const currentNik = state.profile ? (state.profile.nik || '').toUpperCase().trim() : '';
+  const currentArea = state.profile ? (state.profile.area || '').toUpperCase().trim() : '';
+  const userSite = SITE_CODES.includes(currentNik) ? currentNik : (SITE_CODES.includes(currentArea) ? currentArea : 'SITE');
+
+  const confirmMsg = `Apakah Anda yakin ingin mengirim pesan WhatsApp (Pending, Tagihan & Part Bekas) secara otomatis ke ALL ${options.length} teknisi di Site ${userSite}?`;
+  if (!confirm(confirmMsg)) return;
+
+  if (DOM.btnWaBatchSend) DOM.btnWaBatchSend.disabled = true;
+  showToast(`🚀 Memulai pengiriman WhatsApp batch ke ${options.length} teknisi...`, 'info');
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (let i = 0; i < options.length; i++) {
+    const techName = options[i];
+    let phone = '';
+    if (state.userPhoneMap) {
+      for (let k in state.userPhoneMap) {
+        if (matchTechName(k, techName) && state.userPhoneMap[k]) {
+          phone = state.userPhoneMap[k];
+          break;
+        }
+      }
+    }
+
+    if (!phone) {
+      const matchedPending = (state.sheetsData.pendingCases || []).find(item => matchTechName(item.teknisi, techName));
+      if (matchedPending && /^08|^628/.test(matchedPending.teknisi)) phone = matchedPending.teknisi;
+    }
+
+    if (!phone) {
+      showToast(`⚠️ [${i + 1}/${options.length}] ${techName}: Nomor HP/WA tidak ditemukan di Sheet user (Kolom E)`, 'warning');
+      failCount++;
+      continue;
+    }
+
+    const msg = buildTechnicianWaMessage(techName);
+    if (!msg) {
+      failCount++;
+      continue;
+    }
+
+    let cleanPhone = cleanNumberString(phone);
+    if (cleanPhone.startsWith('0')) cleanPhone = '62' + cleanPhone.slice(1);
+
+    try {
+      const formData = new FormData();
+      formData.append('target', cleanPhone);
+      formData.append('message', msg);
+      formData.append('countryCode', '62');
+
+      const resp = await fetch('https://api.fonnte.com/send', {
+        method: 'POST',
+        headers: { 'Authorization': token.trim() },
+        body: formData
+      });
+      const json = await resp.json();
+      if (json && (json.status === true || json.status === 'true' || json.detail)) {
+        successCount++;
+        showToast(`✅ [${i + 1}/${options.length}] WA terkirim ke ${techName}`, 'success');
+      } else {
+        failCount++;
+        showToast(`❌ [${i + 1}/${options.length}] Gagal kirim ke ${techName}: ${json.reason || json.detail || 'Error'}`, 'error');
+      }
+    } catch(err) {
+      failCount++;
+      showToast(`❌ [${i + 1}/${options.length}] Gagal kirim ke ${techName}: ${err.message}`, 'error');
+    }
+
+    await new Promise(r => setTimeout(r, 800));
+  }
+
+  showToast(`🎉 Selesai! ${successCount} pesan WA terkirim, ${failCount} gagal/tanpa no HP.`, 'info');
+  if (DOM.btnWaBatchSend) DOM.btnWaBatchSend.disabled = false;
+  closeWaModal();
+}
+
 function handleWaDirectOpen() {
   const targetPhone = DOM.waTargetPhone ? DOM.waTargetPhone.value.trim() : '';
   const messageText = DOM.waMessagePreview ? DOM.waMessagePreview.value.trim() : '';
@@ -3738,6 +4130,6 @@ function handleWaDirectOpen() {
 
   const encodedMsg = encodeURIComponent(messageText);
   const waUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodedMsg}` : `https://api.whatsapp.com/send?text=${encodedMsg}`;
-  window.open(waUrl, '_blank');
+  window.openWaUrl = window.open(waUrl, '_blank');
   showToast('📲 Membuka WhatsApp...', 'info');
 }

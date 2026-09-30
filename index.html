@@ -242,7 +242,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-clock" style="color:var(--primary);"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Data Case Pending
                 <span class="badge-count" id="pending-tech-count">0 Case</span>
               </div>
-              <button type="button" id="btn-open-wa-pending" class="btn btn-xs" style="display:none; font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px; background:#25D366; color:#fff; border:none;" title="Kirim WA Ke Teknisi">
+              <button type="button" id="btn-open-wa-pending" onclick="openSendWaConfirmModal()" class="btn btn-xs" style="display:none; font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px; background:#25D366; color:#fff; border:none; cursor:pointer;" title="Kirim WA Ke Teknisi">
                 <i data-lucide="message-square"></i> Kirim WA
               </button>
             </div>
@@ -355,7 +355,7 @@
                 <i data-lucide="package"></i> Part Bekas
                 <span class="badge-count" id="part-kembali-count">0 Item</span>
               </div>
-              <button type="button" id="btn-open-wa-part" class="btn btn-xs" style="display:none; font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px; background:#25D366; color:#fff; border:none;" title="Kirim WA Ke Teknisi">
+              <button type="button" id="btn-open-wa-part" onclick="openSendWaConfirmModal()" class="btn btn-xs" style="display:none; font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px; background:#25D366; color:#fff; border:none; cursor:pointer;" title="Kirim WA Ke Teknisi">
                 <i data-lucide="message-square"></i> Kirim WA
               </button>
             </div>
@@ -400,7 +400,7 @@
                 <i data-lucide="banknote"></i> Tagihan Teknisi
                 <span class="badge-count" id="tagihan-count">0 Invoice</span>
               </div>
-              <button type="button" id="btn-open-wa-tagihan" class="btn btn-xs" style="display:none; font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px; background:#25D366; color:#fff; border:none;" title="Kirim WA Ke Teknisi">
+              <button type="button" id="btn-open-wa-tagihan" onclick="openSendWaConfirmModal()" class="btn btn-xs" style="display:none; font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px; background:#25D366; color:#fff; border:none; cursor:pointer;" title="Kirim WA Ke Teknisi">
                 <i data-lucide="message-square"></i> Kirim WA
               </button>
             </div>
@@ -865,13 +865,15 @@
           <button type="button" id="btn-dismiss-missing-modal" class="btn btn-secondary btn-sm" style="border-radius: 4px;">Tutup Halaman</button>
         </div>
       </div>
+    </div>
+
     <!-- ==========================================
          MODAL KIRIM WHATSAPP KE TEKNISI (ADMIN / SITE ADMIN)
          ========================================== -->
     <div id="modal-send-wa" class="modal-overlay" style="padding: 2mm;">
       <div class="modal-card" style="max-width: 480px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; border-radius: 6px; padding: 12px; overflow: hidden; position: relative;">
         <div class="modal-header flex-between align-center" style="padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
-          <div class="modal-title" style="color:#25D366; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+          <div class="modal-title" id="wa-modal-site-title" style="color:#25D366; font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 6px;">
             <i data-lucide="message-square"></i> Kirim WhatsApp Ke Teknisi
           </div>
           <button type="button" id="btn-close-wa-modal" class="btn-clear" style="font-size: 18px;">&times;</button>
@@ -879,7 +881,10 @@
         <div class="modal-body" style="padding: 10px 0; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px;">
           
           <div class="form-group mb-0">
-            <label style="font-size: 11.5px; font-weight: 700; color: var(--text-main);">Pilih Teknisi Target</label>
+            <div class="flex-between align-center mb-1">
+              <label style="font-size: 11.5px; font-weight: 700; color: var(--text-main);">Pilih Teknisi Target</label>
+              <span id="wa-modal-site-badge" style="font-size: 10px; font-weight: 700; color: var(--primary); background: var(--primary-light); padding: 2px 6px; border-radius: 4px;">Site Filter: ALL</span>
+            </div>
             <select id="wa-select-tech" class="custom-select" style="width: 100%; font-size: 12px; padding: 6px 8px; border-radius: 4px;"></select>
           </div>
 
@@ -889,17 +894,20 @@
           </div>
 
           <div class="form-group mb-0">
-            <label style="font-size: 11.5px; font-weight: 700; color: var(--text-main);">Preview Pesan WA (Gabungan Pending & Tagihan)</label>
-            <textarea id="wa-message-preview" rows="9" class="custom-select" style="width: 100%; font-size: 11px; padding: 8px; border-radius: 4px; font-family: inherit; resize: vertical; min-height: 140px;"></textarea>
+            <label style="font-size: 11.5px; font-weight: 700; color: var(--text-main);">Preview Pesan WA (Gabungan Pending, Tagihan & Part)</label>
+            <textarea id="wa-message-preview" rows="8" class="custom-select" style="width: 100%; font-size: 11px; padding: 8px; border-radius: 4px; font-family: inherit; resize: vertical; min-height: 120px;"></textarea>
           </div>
 
         </div>
-        <div class="modal-footer flex-between" style="padding-top: 8px; border-top: 1px solid var(--border-color); gap: 6px;">
-          <button type="button" id="btn-wa-direct-open" class="btn btn-secondary btn-sm" style="flex: 1; font-size: 11px; font-weight: 700; gap: 4px; border-radius: 4px;">
-            <i data-lucide="external-link"></i> Buka Direct WA
+        <div class="modal-footer flex-between" style="padding-top: 8px; border-top: 1px solid var(--border-color); gap: 6px; flex-wrap: wrap;">
+          <button type="button" id="btn-wa-direct-open" class="btn btn-secondary btn-sm" style="flex: 1; min-width: 120px; font-size: 11px; font-weight: 700; gap: 4px; border-radius: 4px;">
+            <i data-lucide="external-link"></i> Direct WA
           </button>
-          <button type="button" id="btn-wa-fonnte-send" class="btn btn-success btn-sm" style="flex: 1; font-size: 11px; font-weight: 700; gap: 4px; border-radius: 4px; background: #25D366; color: #fff; border: none;">
-            <i data-lucide="send"></i> Kirim via Fonte
+          <button type="button" id="btn-wa-fonnte-send" class="btn btn-success btn-sm" style="flex: 1; min-width: 120px; font-size: 11px; font-weight: 700; gap: 4px; border-radius: 4px; background: #25D366; color: #fff; border: none;">
+            <i data-lucide="send"></i> Kirim (1 Teknisi)
+          </button>
+          <button type="button" id="btn-wa-batch-send" class="btn btn-primary btn-sm" style="flex: 100%; font-size: 11.5px; font-weight: 800; gap: 6px; border-radius: 4px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; padding: 9px 12px; margin-top: 2px;">
+            <i data-lucide="send"></i> 🚀 KIRIM WA KE SEMUA TEKNISI SITE INI
           </button>
         </div>
       </div>
