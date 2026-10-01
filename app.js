@@ -1151,6 +1151,7 @@ async function handleLogin() {
     try { history.replaceState({ tab: 'tab-menu' }, '', '#tab-menu'); } catch (e) {}
 
     state.isLoggedIn = true;
+    clearAllRenderedViewsAndData();
     showAppScreen();
     showToast(`Login Berhasil! Selamat Datang, ${state.profile.nama}`, 'success');
 
@@ -1167,47 +1168,13 @@ function handleLogout() {
   openLogoutConfirmModal();
 }
 
-async function performLogout() {
-  // Preserve ONLY Saved Login Credentials and App Theme
-  const keepKeys = [
-    STORAGE_KEYS.SAVED_LOGIN,
-    STORAGE_KEYS.THEME
-  ];
-
-  try {
-    const keysToRemove = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && !keepKeys.includes(key)) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach(k => localStorage.removeItem(k));
-
-    if ('caches' in window) {
-      const cacheNames = await caches.keys();
-      await Promise.all(cacheNames.map(name => caches.delete(name)));
-    }
-  } catch (e) {
-    console.warn('Gagal menghapus cache saat logout:', e);
-  }
-
-  // Reset runtime state completely
-  state.isLoggedIn = false;
-  state.isAdmin = false;
-  state.isSiteAdmin = false;
-  state.profile = { id: '', nama: '', nik: '', psw: '', usePsw: true };
-  state.finishHistory = [];
-  state.finishParsedAllRows = [];
-  state.pipoData = [];
-  state.userAreaMap = {};
-  state.userPhoneMap = {};
+function clearAllRenderedViewsAndData() {
   state.sheetsData = {
-    lastUpdateTimestamp: '',
-    pendingTimestamp: '',
-    performaTimestamp: '',
-    partKembaliTimestamp: '',
-    tagihanTimestamp: '',
+    lastUpdateTimestamp: 'Memuat data....',
+    pendingTimestamp: 'Memuat data....',
+    performaTimestamp: 'Memuat data....',
+    partKembaliTimestamp: 'Memuat data....',
+    tagihanTimestamp: 'Memuat data....',
     lastSyncTime: 0,
     pendingCases: [],
     insentifRows: [],
@@ -1218,13 +1185,68 @@ async function performLogout() {
     tagihanRows: [],
     pdsRows: []
   };
+  state.finishParsedAllRows = [];
+  state.finishHistory = [];
+  state.rawRowsData = [];
+
+  const loaderHtml = `
+    <div class="empty-state-sm">
+      <i data-lucide="loader-2" class="spin-lg"></i>
+      <p>Memuat data terbaru...</p>
+    </div>
+  `;
+
+  if (DOM.pendingListContainer) DOM.pendingListContainer.innerHTML = loaderHtml;
+  if (DOM.performaContentContainer) DOM.performaContentContainer.innerHTML = loaderHtml;
+  if (DOM.finishRecapContentContainer) DOM.finishRecapContentContainer.innerHTML = loaderHtml;
+  if (DOM.partKembaliListContainer) DOM.partKembaliListContainer.innerHTML = loaderHtml;
+  if (DOM.tagihanListContainer) DOM.tagihanListContainer.innerHTML = loaderHtml;
+  if (DOM.notifListContainer) DOM.notifListContainer.innerHTML = loaderHtml;
+  if (DOM.pdsContentContainer) DOM.pdsContentContainer.innerHTML = loaderHtml;
+  if (DOM.finishAllList) DOM.finishAllList.innerHTML = '';
+
+  if (DOM.sheetZ2Timestamp) DOM.sheetZ2Timestamp.textContent = 'Memuat data....';
+  if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons();
+}
+
+async function performLogout() {
+  try {
+    // 1. Completely clear all localStorage & sessionStorage
+    localStorage.clear();
+    sessionStorage.clear();
+
+    // 2. Completely delete all CacheStorage instances (PWA / HTTP Cache)
+    if ('caches' in window) {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map(name => caches.delete(name)));
+    }
+  } catch (e) {
+    console.warn('Gagal menghapus cache saat logout:', e);
+  }
+
+  // 3. Clear all DOM views & reset runtime state completely
+  clearAllRenderedViewsAndData();
+  state.isLoggedIn = false;
+  state.isAdmin = false;
+  state.isSiteAdmin = false;
+  state.profile = { id: '', nama: '', nik: '', psw: '', usePsw: true };
+  state.pipoData = [];
+  state.userAreaMap = {};
+  state.userPhoneMap = {};
+
+  // 4. Reset input values on login screen
+  if (DOM.loginUsername) DOM.loginUsername.value = '';
+  if (DOM.loginPassword) DOM.loginPassword.value = '';
+  if (DOM.rememberMe) DOM.rememberMe.checked = false;
 
   stopSheetsPolling();
   document.documentElement.classList.remove('is-logged-in');
   document.documentElement.classList.remove('is-admin');
   document.documentElement.removeAttribute('data-active-tab');
+  document.documentElement.removeAttribute('data-current-mode');
+
   showLoginScreen();
-  showToast('✅ Anda telah keluar. Seluruh cache data telah dibersihkan!', 'info');
+  showToast('✅ Anda telah keluar. Seluruh cache & penyimpanan lokal telah dihapus!', 'info');
 }
 
 function saveProfileSilently() {
@@ -1801,11 +1823,32 @@ function prepareFinishForm() {
           if (u.nama && u.nama.trim()) rawList.push(u.nama.trim());
         });
       }
+      if (state.userAreaMap) {
+        Object.keys(state.userAreaMap).forEach(k => {
+          if (k && k.trim()) rawList.push(k.trim());
+        });
+      }
+      if (state.sheetsData && state.sheetsData.insentifRows) {
+        state.sheetsData.insentifRows.forEach(item => {
+          if (item && item.nama && item.nama.trim()) rawList.push(item.nama.trim());
+        });
+      }
+      if (state.sheetsData && state.sheetsData.pendingCases) {
+        state.sheetsData.pendingCases.forEach(item => {
+          if (item && item.teknisi && item.teknisi.trim()) rawList.push(item.teknisi.trim());
+        });
+      }
+      if (state.finishParsedAllRows) {
+        state.finishParsedAllRows.forEach(item => {
+          if (item && item.nama && item.nama.trim()) rawList.push(item.nama.trim());
+        });
+      }
 
-      // Deduplicate case-insensitively
+      // Deduplicate case-insensitively while keeping clean casing
       const seen = new Set();
       let choices = [];
       rawList.forEach(name => {
+        if (!name || name.toUpperCase() === 'NAMA TEKNISI' || name.toUpperCase() === 'TEKNISI') return;
         const normalized = name.trim().toLowerCase();
         if (!seen.has(normalized)) {
           seen.add(normalized);
@@ -2175,8 +2218,8 @@ function renderFinishAllDataTab(parsedRows = null) {
               <span class="finish-data-tech">${escapeHtml(item.nama)}</span>
             </div>
             <div class="finish-stats-grid">
-              <div class="finish-stat-box"><label>Outdoor (Fin/Tgs)</label><strong>${item.finishOutdoor} / ${item.caseOutdoor}</strong></div>
-              <div class="finish-stat-box"><label>Indoor Finish</label><strong style="color:var(--primary);">${item.finishIndoor}</strong></div>
+              <div class="finish-stat-box"><label>Outdoor (Unit/Tgs)</label><strong>${item.finishOutdoor} / ${item.caseOutdoor}</strong></div>
+              <div class="finish-stat-box"><label>Indoor Unit</label><strong style="color:var(--primary);">${item.finishIndoor}</strong></div>
               <div class="finish-stat-box"><label>WIP COMP</label><strong style="color:var(--warning);">${item.wipComp}</strong></div>
               <div class="finish-stat-box"><label>WIP TECH</label><strong style="color:var(--secondary);">${item.wipTech}</strong></div>
               <div class="finish-stat-box"><label>Batal</label><strong style="color:var(--danger);">${item.batal}</strong></div>
@@ -2243,7 +2286,7 @@ function startMissingAutoRefresh() {
     } else {
       stopMissingAutoRefresh();
     }
-  }, 10000); // Auto refresh every 10 seconds
+  }, 5000); // Auto refresh every 5 seconds
 }
 
 function stopMissingAutoRefresh() {
@@ -2689,11 +2732,16 @@ function loadSheetsCache() {
   if (cached) {
     try {
       const parsed = JSON.parse(cached);
+      const currentNik = (state.profile && state.profile.nik) ? String(state.profile.nik).trim() : '';
+      if (parsed && parsed.cacheNik && currentNik && parsed.cacheNik !== currentNik) {
+        return; // Skip cache from a different NIK session
+      }
       state.sheetsData = {
         ...state.sheetsData,
         ...parsed
       };
       renderAllSheetsViews();
+      return;
     } catch (e) {
       console.warn('Gagal parse cache Google Sheets:', e);
     }
@@ -2704,7 +2752,11 @@ function loadSheetsCache() {
 function saveSheetsCache() {
   try {
     const key = getSheetsCacheKey();
-    localStorage.setItem(key, JSON.stringify(state.sheetsData));
+    const currentNik = (state.profile && state.profile.nik) ? String(state.profile.nik).trim() : '';
+    localStorage.setItem(key, JSON.stringify({
+      ...state.sheetsData,
+      cacheNik: currentNik
+    }));
   } catch (e) {
     console.warn('Gagal simpan cache Google Sheets:', e);
   }
@@ -3123,7 +3175,7 @@ function startSheetsPolling() {
   state.sheetsPollTimer = setInterval(() => {
     fetchGoogleSheetsData();
     fetchPipoData();
-  }, 10000);
+  }, 5000); // Ambil data otomatis dari Google Sheet setiap 5 detik
 }
 
 function stopSheetsPolling() {
@@ -3142,6 +3194,7 @@ function renderAllSheetsViews() {
   renderTagihanTab();
   renderPdsTab();
   renderFinishRecapTab();
+  prepareFinishForm();
   updateBadges();
 }
 
@@ -3447,9 +3500,14 @@ function renderPerformaTab() {
   const totalUnitCount = indoorCount + outdoorCount + acCount + evTotal;
   const calculatedRataRata = workingDaysCount > 0 ? (totalUnitCount / workingDaysCount).toFixed(1) : '0.0';
 
-  const selisih160 = Math.abs(totalUnitCount - (160 * activeTechCount));
-  const selisih107 = Math.abs(totalUnitCount - (107 * activeTechCount));
-  const calculatedSelisih = `${selisih160} / ${selisih107}`;
+  const target160 = 160 * activeTechCount;
+  const target107 = 107 * activeTechCount;
+
+  const diff160 = totalUnitCount - target160;
+  const diff107 = totalUnitCount - target107;
+
+  const formatDiff = (d) => (d > 0 ? `+${d}` : `${d}`);
+  const calculatedSelisih = `${formatDiff(diff160)} / ${formatDiff(diff107)}`;
 
   DOM.performaContentContainer.innerHTML = `
     <!-- Hero Performance Overview -->
@@ -3590,8 +3648,8 @@ function renderPartKembaliTab() {
             <div style="font-size:13px; font-weight:800; color:var(--text-main); word-break:break-all;">${escapeHtml(item.noGudang)}</div>
           </div>
         </div>
-        <div style="flex-shrink:0;">
-          <span style="font-size:9.5px; font-weight:800; color:var(--primary); background:rgba(16, 185, 129, 0.15); padding:2px 6px; border-radius:var(--radius-sm); border:1px solid rgba(16, 185, 129, 0.3); display:inline-block;">
+        <div style="flex-shrink:0; margin-left:auto; text-align:right;">
+          <span style="font-size:11.5px; font-weight:800; color:var(--primary); background:rgba(16, 185, 129, 0.15); padding:3px 8px; border-radius:var(--radius-sm); border:1px solid rgba(16, 185, 129, 0.3); display:inline-block;">
             Qty: ${escapeHtml(item.qty)}
           </span>
         </div>
@@ -4305,9 +4363,6 @@ function renderPdsTab() {
           <i data-lucide="award" style="color:var(--primary); width:15px; height:15px;"></i>
           <span>RINGKASAN PENCAPAIAN PDS ALL SITE</span>
         </div>
-        <span class="badge" style="background:var(--primary-light); color:var(--primary); font-size:11px; font-weight:800; padding:2px 8px; border-radius:4px;">
-          ${pdsList.length} Site Total
-        </span>
       </div>
 
       <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; text-align:center;">
@@ -4361,18 +4416,15 @@ function renderPdsTab() {
     html += `
       <div class="pds-site-card" style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:10px 12px; display:flex; flex-direction:column; gap:8px; box-shadow:var(--shadow-main);">
         <div style="display:flex; align-items:center; justify-content:space-between;">
-          <div style="display:flex; align-items:center; gap:6px;">
-            <div style="width:28px; height:28px; border-radius:4px; background:var(--primary-light); color:var(--primary); font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center;">
-              ${escapeHtml(item.site.substring(0, 3))}
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="width:30px; height:30px; border-radius:6px; background:var(--primary-light); color:var(--primary); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+              <i data-lucide="building-2" style="width:16px; height:16px;"></i>
             </div>
             <div>
-              <div style="font-size:13px; font-weight:800; color:var(--text-main); line-height:1.1;">${escapeHtml(item.site)}</div>
+              <div style="font-size:14px; font-weight:800; color:var(--text-main); line-height:1.1;">${escapeHtml(item.site)}</div>
               <div style="font-size:9.5px; color:var(--text-muted);">Data Load & Pending PDS</div>
             </div>
           </div>
-          <span style="font-size:11px; font-weight:800; padding:2px 8px; border-radius:4px; background:${badgeBg}; color:${badgeColor};">
-            ${escapeHtml(item.pctPending)}
-          </span>
         </div>
 
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; background:var(--bg-input); padding:8px; border-radius:4px; border:1px solid var(--border-color);">
@@ -4645,12 +4697,9 @@ function renderFinishRecapTab() {
           <div class="flex-between align-center" style="border-bottom:1px dashed var(--border-color); padding-bottom:5px;">
             <div style="font-size:12px; font-weight:800; color:var(--text-main); display:flex; align-items:center; gap:6px;">
               <i data-lucide="calendar" style="width:14px; height:14px; color:var(--primary);"></i>
-              <span>TGL ${dayStr} - ${escapeHtml(formattedDate)}</span>
+              <span>${escapeHtml(formattedDate)}</span>
               ${isToday ? `<span style="font-size:9.5px; background:var(--primary); color:#fff; padding:1px 6px; border-radius:3px; font-weight:800;">HARI INI</span>` : ''}
             </div>
-            <span style="font-size:10px; font-weight:800; background:var(--primary-light); color:var(--primary); padding:2px 8px; border-radius:4px;">
-              Total: ${totalOutputDay} Unit
-            </span>
           </div>
       `;
 
@@ -4660,10 +4709,10 @@ function renderFinishRecapTab() {
 
         html += `
           <div style="background:var(--bg-input); padding:8px 10px; border-radius:4px; border:1px solid var(--border-color); display:flex; flex-direction:column; gap:4px; margin-top:2px;">
-            <div class="flex-between align-center">
-              <span style="font-size:11.5px; font-weight:800; color:var(--text-main);">${escapeHtml(item.nama)}</span>
-              <span style="font-size:11px; font-weight:800; color:var(--success); background:rgba(16, 185, 129, 0.12); padding:2px 6px; border-radius:4px;">
-                ${item.output} Finish
+            <div class="flex-between align-center" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+              <span style="font-size:12px; font-weight:800; color:var(--text-main); flex:1; min-width:0;">${escapeHtml(item.nama)}</span>
+              <span style="font-size:14px; font-weight:800; color:var(--success); background:rgba(16, 185, 129, 0.15); padding:4px 10px; border-radius:4px; text-align:right; margin-left:auto; flex-shrink:0;">
+                ${item.output} Unit
               </span>
             </div>
         `;
@@ -4678,12 +4727,6 @@ function renderFinishRecapTab() {
               <div style="background:var(--bg-card); padding:4px; border-radius:4px; border:1px solid var(--border-color);"><span style="color:var(--text-muted); font-size:9px;">BATAL</span><br/><strong style="color:var(--danger); font-size:11.5px;">${detailLog.batal}</strong></div>
             </div>
             ${detailLog.ket ? `<div style="font-size:10px; color:var(--text-muted); font-style:italic; margin-top:2px;"><i data-lucide="message-square" style="width:10px; height:10px; vertical-align:middle; margin-right:3px;"></i>${escapeHtml(detailLog.ket)}</div>` : ''}
-          `;
-        } else {
-          html += `
-            <div style="font-size:10px; color:var(--text-muted); margin-top:1px;">
-              Finish Harian Tanggal ${item.day}: <strong>${item.output} unit</strong>
-            </div>
           `;
         }
 

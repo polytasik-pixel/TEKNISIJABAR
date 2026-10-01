@@ -256,7 +256,6 @@
             <div class="card-header flex-between align-center" style="flex:0 0 auto; margin-bottom:8px; border-bottom:1px solid var(--border-color); padding-bottom:6px;">
               <div class="card-title" style="color:var(--primary); font-size:14px; font-weight:700; display:flex; align-items:center; gap:6px;">
                 <i data-lucide="bar-chart-3"></i> Pencapaian PDS (All Site)
-                <span class="badge-count" id="pds-site-count">0 Site</span>
               </div>
               <button type="button" id="btn-refresh-pds" class="btn btn-ghost btn-xs" style="font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px;" title="Refresh Data">
                 <i data-lucide="refresh-cw" id="sync-icon-pds"></i> Refresh
@@ -299,52 +298,10 @@
             </div>
 
             <div id="pending-list-container" class="pending-container">
-              <script>
-                (function() {
-                  try {
-                    var raw = localStorage.getItem('google_sheets_cache');
-                    if (!raw) {
-                      for (var k in localStorage) {
-                        if (k.indexOf('google_sheets_cache') === 0) {
-                          raw = localStorage.getItem(k);
-                          break;
-                        }
-                      }
-                    }
-                    if (raw) {
-                      var sc = JSON.parse(raw);
-                      if (sc && sc.pendingCases && sc.pendingCases.length > 0) {
-                        var html = sc.pendingCases.map(function(item) {
-                          var statusLower = (item.status || '').toLowerCase();
-                          var statusClass = 'printed';
-                          if (statusLower.indexOf('wip comp') !== -1 || statusLower.indexOf('selesai') !== -1) statusClass = 'wip-comp';
-                          else if (statusLower.indexOf('wip') !== -1) statusClass = 'wip';
-                          return '<div class="pending-card" style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:10px 12px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px;">' +
-                            '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">' +
-                              '<div style="font-size:10px; font-weight:600; color:var(--text-main); display:flex; align-items:center; gap:5px; word-break:break-all;">' +
-                                '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary);flex-shrink:0;"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg> ' +
-                                '<span>' + (item.no_case || '-') + '</span>' +
-                              '</div>' +
-                              '<span class="pending-status-badge ' + statusClass + '" style="flex-shrink:0; font-size:10px; padding:2px 7px; font-weight:700;">' + (item.status || 'PENDING') + '</span>' +
-                            '</div>' +
-                            '<div style="display:grid; grid-template-columns:1fr 1fr; gap:4px 8px; font-size:10px; color:var(--text-main); border-top:1px dashed var(--border-color); padding-top:6px;">' +
-                              '<div style="display:flex; align-items:center; gap:4px;" title="Tanggal (BE)"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary);flex-shrink:0;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>' + (item.tgl || '-') + '</span></div>' +
-                              '<div style="display:flex; align-items:center; gap:4px;" title="Type Unit (BF)"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--info, #3b82f6);flex-shrink:0;"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/></svg><span style="word-break:break-all;">' + (item.type || '-') + '</span></div>' +
-                              '<div style="display:flex; align-items:center; gap:4px;" title="No Seri (BG)"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--warning);flex-shrink:0;"><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></svg><span style="word-break:break-all;">' + (item.seri || item.sn || '-') + '</span></div>' +
-                              '<div style="display:flex; align-items:center; gap:4px;" title="SCL (BH)"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--warning);flex-shrink:0;"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg><span style="word-break:break-all;">' + (item.scl || item.no_scl || '-') + '</span></div>' +
-                              '<div style="display:flex; align-items:center; gap:4px;" title="Site (BC)"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary);flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>' + (item.site || '-') + '</span></div>' +
-                              '<div style="display:flex; align-items:center; gap:4px;" title="Teknisi (BB)"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted);flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span style="word-break:break-all;">' + (item.teknisi || '-') + '</span></div>' +
-                            '</div>' +
-                          '</div>';
-                        }).join('');
-                        document.write(html);
-                        return;
-                      }
-                    }
-                  } catch(e) {}
-                  document.write('<div class="empty-state-sm"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spin-lg" style="color:var(--primary);"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><p>Memuat data Pending...</p></div>');
-                })();
-              </script>
+              <div class="empty-state-sm">
+                <i data-lucide="loader-2" class="spin-lg"></i>
+                <p>Memuat data Case Pending...</p>
+              </div>
             </div>
           </div>
         </section>
