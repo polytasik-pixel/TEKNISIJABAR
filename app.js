@@ -247,7 +247,14 @@ const DOM = {
   pdsContentContainer: document.getElementById('pds-content-container'),
   btnRefreshPds: document.getElementById('btn-refresh-pds'),
   syncIconPds: document.getElementById('sync-icon-pds'),
-  pdsSiteCount: document.getElementById('pds-site-count')
+  pdsSiteCount: document.getElementById('pds-site-count'),
+
+  // Finishan Harian Recap (Tgl 1-31) Elements
+  btnOpenFinishRecap: document.getElementById('btn-open-finish-recap'),
+  btnBackToPerforma: document.getElementById('btn-back-to-performa'),
+  btnRefreshFinishRecap: document.getElementById('btn-refresh-finish-recap'),
+  syncIconFinishRecap: document.getElementById('sync-icon-finish-recap'),
+  finishRecapContentContainer: document.getElementById('finish-recap-content-container')
 };
 
 // ==========================================
@@ -380,13 +387,13 @@ function showAppScreen() {
   const hashTab = window.location.hash ? window.location.hash.replace('#', '') : '';
   const savedTab = localStorage.getItem(STORAGE_KEYS.LAST_TAB);
 
-  const validTabs = ['tab-menu', 'tab-pending', 'tab-performa', 'tab-notif', 'tab-part-kembali', 'tab-tagihan', 'tab-pipo', 'tab-finish', 'tab-finish-all', 'tab-profile', 'tab-pencapaian-pds'];
+  const validTabs = ['tab-menu', 'tab-pending', 'tab-performa', 'tab-finish-recap', 'tab-notif', 'tab-part-kembali', 'tab-tagihan', 'tab-pipo', 'tab-finish', 'tab-finish-all', 'tab-profile', 'tab-pencapaian-pds'];
   let initialTab = 'tab-menu';
 
   if (hashTab && validTabs.includes(hashTab)) {
     initialTab = hashTab;
   } else if (savedTab && validTabs.includes(savedTab)) {
-    initialTab = savedTab;
+    initialTab = (savedTab === 'tab-finish-recap') ? 'tab-performa' : savedTab;
   }
 
   try {
@@ -553,6 +560,35 @@ function setupEventListeners() {
       fetchGoogleSheetsData().finally(() => {
         if (syncIcon) syncIcon.classList.remove('spinning');
       });
+    });
+  }
+  if (DOM.btnOpenFinishRecap) {
+    DOM.btnOpenFinishRecap.addEventListener('click', () => {
+      requestTabSwitch('tab-finish-recap');
+    });
+  }
+  if (DOM.btnBackToPerforma) {
+    DOM.btnBackToPerforma.addEventListener('click', () => {
+      requestTabSwitch('tab-performa');
+    });
+  }
+  if (DOM.btnRefreshFinishRecap) {
+    DOM.btnRefreshFinishRecap.addEventListener('click', async () => {
+      let syncIcon = document.getElementById('sync-icon-finish-recap') || DOM.syncIconFinishRecap;
+      if (syncIcon) syncIcon.classList.add('spinning');
+      showToast('🔄 Memperbarui data finish harian...', 'info');
+      try {
+        await Promise.all([
+          fetchGoogleSheetsData(),
+          fetchFinishSheetData()
+        ]);
+        renderFinishRecapTab();
+      } catch (e) {
+        console.warn('Error refresh finish recap:', e);
+      } finally {
+        syncIcon = document.getElementById('sync-icon-finish-recap') || DOM.syncIconFinishRecap;
+        if (syncIcon) syncIcon.classList.remove('spinning');
+      }
     });
   }
   if (DOM.btnSelectModePartKembali) {
@@ -824,6 +860,12 @@ function setupEventListeners() {
       lastBackPressTime = now;
       try { history.pushState({ tab: 'tab-menu' }, '', '#tab-menu'); } catch (err) {}
       showToast('Tekan sekali lagi untuk keluar', 'warning');
+      return;
+    }
+
+    // Hierarchical Back Navigation (tab-finish-recap -> tab-performa -> tab-menu)
+    if (state.activeTab === 'tab-finish-recap') {
+      switchTab('tab-performa', false);
       return;
     }
 
@@ -1125,10 +1167,9 @@ function handleLogout() {
   openLogoutConfirmModal();
 }
 
-function performLogout() {
-  // Preserve PIPO Cache (Part Pengganti), Saved Login Credentials, and App Theme
+async function performLogout() {
+  // Preserve ONLY Saved Login Credentials and App Theme
   const keepKeys = [
-    STORAGE_KEYS.PIPO_CACHE,
     STORAGE_KEYS.SAVED_LOGIN,
     STORAGE_KEYS.THEME
   ];
@@ -1142,13 +1183,25 @@ function performLogout() {
       }
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
+
+    if ('caches' in window) {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map(name => caches.delete(name)));
+    }
   } catch (e) {
     console.warn('Gagal menghapus cache saat logout:', e);
   }
 
+  // Reset runtime state completely
+  state.isLoggedIn = false;
+  state.isAdmin = false;
+  state.isSiteAdmin = false;
   state.profile = { id: '', nama: '', nik: '', psw: '', usePsw: true };
   state.finishHistory = [];
   state.finishParsedAllRows = [];
+  state.pipoData = [];
+  state.userAreaMap = {};
+  state.userPhoneMap = {};
   state.sheetsData = {
     lastUpdateTimestamp: '',
     pendingTimestamp: '',
@@ -1162,14 +1215,16 @@ function performLogout() {
     outputHariIni: [],
     notifications: [],
     partBelumKembali: [],
-    tagihanRows: []
+    tagihanRows: [],
+    pdsRows: []
   };
 
+  stopSheetsPolling();
   document.documentElement.classList.remove('is-logged-in');
   document.documentElement.classList.remove('is-admin');
   document.documentElement.removeAttribute('data-active-tab');
   showLoginScreen();
-  showToast('Anda telah keluar dari akun. Semua cache data (kecuali Part Pengganti) telah dibersihkan.', 'info');
+  showToast('✅ Anda telah keluar. Seluruh cache data telah dibersihkan!', 'info');
 }
 
 function saveProfileSilently() {
@@ -1180,7 +1235,7 @@ function updateModeNavVisibility(targetTabId) {
   // Determine active mode
   if (targetTabId === 'tab-menu') {
     state.currentMode = 'menu';
-  } else if (targetTabId === 'tab-pending' || targetTabId === 'tab-performa' || targetTabId === 'tab-notif' || targetTabId === 'tab-part-kembali' || targetTabId === 'tab-tagihan') {
+  } else if (targetTabId === 'tab-pending' || targetTabId === 'tab-performa' || targetTabId === 'tab-finish-recap' || targetTabId === 'tab-notif' || targetTabId === 'tab-part-kembali' || targetTabId === 'tab-tagihan') {
     state.currentMode = 'teknisi';
   } else if (targetTabId === 'tab-pipo') {
     state.currentMode = 'pipo';
@@ -1300,6 +1355,11 @@ function switchTab(targetTabId, pushState = true) {
     if (DOM.btnFinishPageAll) DOM.btnFinishPageAll.classList.remove('active');
     if (DOM.finishPageForm) DOM.finishPageForm.style.display = 'block';
     if (DOM.finishPageAll) DOM.finishPageAll.style.display = 'none';
+  } else if (targetTabId === 'tab-finish-recap') {
+    renderFinishRecapTab();
+    fetchFinishSheetData().then(() => {
+      renderFinishRecapTab();
+    }).catch(e => {});
   }
 
   renderSheetUpdateInfo();
@@ -1722,70 +1782,55 @@ function prepareFinishForm() {
   if (DOM.finishKet) DOM.finishKet.value = '';
 
   if (DOM.finishNama) {
-    const rawList = [...VALID_FORM_TECHNICIANS];
-    if (state.adminUsers && state.adminUsers.length > 0) {
-      state.adminUsers.forEach(u => {
-        if (u.nama && u.nama.trim()) rawList.push(u.nama.trim());
-      });
-    }
+    const nikUpper = (state.profile ? state.profile.nik || '' : '').toUpperCase().trim();
+    const isGlobalAdmin = nikUpper === 'ADMIN';
+    const isSiteAdmin = SITE_CODES.includes(nikUpper);
+    const loggedInName = state.profile ? (state.profile.nama || '').trim() : '';
 
-    // Deduplicate case-insensitively
-    const seen = new Set();
-    let choices = [];
-    rawList.forEach(name => {
-      const normalized = name.trim().toLowerCase();
-      if (!seen.has(normalized)) {
-        seen.add(normalized);
-        choices.push(name.trim());
+    if (!isGlobalAdmin && !isSiteAdmin) {
+      // 1. Normal Technician Login (login NIK) -> ONLY 1 option: the logged in user
+      const techName = loggedInName || 'Teknisi';
+      DOM.finishNama.innerHTML = `<option value="${escapeHtml(techName)}">${escapeHtml(techName)}</option>`;
+      DOM.finishNama.value = techName;
+      DOM.finishNama.disabled = true;
+    } else {
+      // 2. Admin / Site Admin Login -> List all technicians matching site role
+      const rawList = [...VALID_FORM_TECHNICIANS];
+      if (state.adminUsers && state.adminUsers.length > 0) {
+        state.adminUsers.forEach(u => {
+          if (u.nama && u.nama.trim()) rawList.push(u.nama.trim());
+        });
       }
-    });
 
-    // If logged in as Site Admin, filter options to ONLY technicians matching site role
-    if (state.isLoggedIn && state.profile) {
-      const nikUpper = (state.profile.nik || '').toUpperCase().trim();
-      const userAreaUpper = (state.profile.area || '').toUpperCase().trim();
-      const isSiteAdmin = SITE_CODES.includes(nikUpper) || (state.isAdmin && SITE_CODES.includes(userAreaUpper)) || !!state.isSiteAdmin;
-      if (isSiteAdmin && nikUpper !== 'ADMIN') {
+      // Deduplicate case-insensitively
+      const seen = new Set();
+      let choices = [];
+      rawList.forEach(name => {
+        const normalized = name.trim().toLowerCase();
+        if (!seen.has(normalized)) {
+          seen.add(normalized);
+          choices.push(name.trim());
+        }
+      });
+
+      // Filter options to ONLY technicians matching site role for Site Admin
+      if (isSiteAdmin && !isGlobalAdmin) {
         const filteredChoices = choices.filter(name => isMatchForCurrentRole(name));
         if (filteredChoices.length > 0) {
           choices = filteredChoices;
         }
       }
-    }
 
-    const currentSelected = DOM.finishNama.value;
-    DOM.finishNama.innerHTML = choices.map(t =>
-      `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`
-    ).join('');
+      const currentSelected = DOM.finishNama.value;
+      DOM.finishNama.innerHTML = choices.map(t =>
+        `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`
+      ).join('');
 
-    const loggedInName = state.profile ? state.profile.nama : (state.user ? state.user.nama : '');
-
-    if (state.isAdmin) {
       DOM.finishNama.disabled = false;
       if (currentSelected && choices.includes(currentSelected)) {
         DOM.finishNama.value = currentSelected;
-      }
-    } else {
-      DOM.finishNama.disabled = true;
-      let match = choices.find(
-        t => t.toLowerCase().trim() === loggedInName.toLowerCase().trim()
-      );
-      if (!match) {
-        match = choices.find(
-          t => t.toLowerCase().includes(loggedInName.toLowerCase().trim()) || loggedInName.toLowerCase().includes(t.toLowerCase().trim())
-        );
-      }
-      if (match) {
-        DOM.finishNama.value = match;
-      } else if (loggedInName) {
-        const normLoggedIn = loggedInName.trim().toLowerCase();
-        if (!seen.has(normLoggedIn)) {
-          const opt = document.createElement('option');
-          opt.value = loggedInName.trim();
-          opt.textContent = loggedInName.trim();
-          DOM.finishNama.appendChild(opt);
-        }
-        DOM.finishNama.value = loggedInName.trim();
+      } else if (choices.length > 0) {
+        DOM.finishNama.value = choices[0];
       }
     }
   }
@@ -2629,7 +2674,7 @@ function getBestMatchedItem(items, targetNama, targetNik = '') {
     }
   }
 
-  return bestItem || items[0] || {};
+  return (bestScore > 0 && bestItem) ? bestItem : {};
 }
 
 function getSheetsCacheKey() {
@@ -3029,7 +3074,9 @@ async function fetchGoogleSheetsData() {
     }
 
     // Update state & single source of truth cache
+    state.rawRowsData = rowsData;
     state.sheetsData = {
+      rawRowsData: rowsData,
       lastUpdateTimestamp: pendingTimestamp,
       pendingTimestamp,
       performaTimestamp,
@@ -3051,6 +3098,7 @@ async function fetchGoogleSheetsData() {
 
     // Auto-sync Finish Sheet Data & update views live
     fetchFinishSheetData().then(({ filledDatesSet, parsedAllRows }) => {
+      renderFinishRecapTab();
       if (DOM.modalMissingFinish && DOM.modalMissingFinish.classList.contains('active')) {
         renderMissingDatesList(filledDatesSet);
       }
@@ -3092,6 +3140,7 @@ function renderAllSheetsViews() {
   renderPartKembaliTab();
   renderTagihanTab();
   renderPdsTab();
+  renderFinishRecapTab();
   updateBadges();
 }
 
@@ -3282,10 +3331,9 @@ function renderPerformaTab() {
   const currentNama = state.profile ? (state.profile.nama || '') : '';
   const currentNik = state.profile ? (state.profile.nik || '') : '';
   const nikUpper = currentNik.toUpperCase().trim();
-  const userAreaUpper = (state.profile ? (state.profile.area || '') : '').toUpperCase().trim();
-  const isSiteAdmin = SITE_CODES.includes(nikUpper) || (state.isAdmin && SITE_CODES.includes(userAreaUpper)) || !!state.isSiteAdmin;
   const isGlobalAdmin = nikUpper === 'ADMIN';
-  const isAdminOrSiteAdmin = isGlobalAdmin || isSiteAdmin || state.isAdmin;
+  const isSiteAdmin = SITE_CODES.includes(nikUpper);
+  const isAdminOrSiteAdmin = isGlobalAdmin || isSiteAdmin;
 
   const insentifList = state.sheetsData.insentifRows || [];
   const outputList = state.sheetsData.outputHariIni || [];
@@ -3312,6 +3360,7 @@ function renderPerformaTab() {
   let acCount = 0;
   let evTotal = 0;
   let techBreakdown = [];
+  let activeTechCount = 1;
 
   if (isAdminOrSiteAdmin && insentifList.length > 0) {
     // ==========================================================
@@ -3325,6 +3374,15 @@ function renderPerformaTab() {
       if (isGlobalAdmin) return true;
       return isMatchForCurrentRole(item.nama);
     });
+
+    activeTechCount = activeInsentifList.length > 0 ? activeInsentifList.length : 1;
+
+    if (isGlobalAdmin) {
+      displayName = 'Performa All Site (JABAR)';
+    } else if (isSiteAdmin) {
+      const siteCode = SITE_CODES.includes(nikUpper) ? nikUpper : userAreaUpper;
+      displayName = `Performa Site ${siteCode} (${activeTechCount} Teknisi)`;
+    }
 
     const outputMap = {};
     outputList.forEach(item => {
@@ -3367,7 +3425,7 @@ function renderPerformaTab() {
 
   } else {
     // ==========================================================
-    // SINGLE TECHNICIAN QUANTITIES (NORMAL LOGIN)
+    // SINGLE TECHNICIAN QUANTITIES (NORMAL NIK LOGIN)
     // ==========================================================
     const insentif = getBestMatchedItem(insentifList, currentNama, currentNik);
     const outputObj = getBestMatchedItem(outputList, currentNama, currentNik);
@@ -3382,14 +3440,14 @@ function renderPerformaTab() {
 
     displayInsentif = formatRupiah(insentif.insentif);
     displayOutputHariIni = outputObj.total_output || '0';
+    activeTechCount = 1;
   }
 
   const totalUnitCount = indoorCount + outdoorCount + acCount + evTotal;
   const calculatedRataRata = workingDaysCount > 0 ? (totalUnitCount / workingDaysCount).toFixed(1) : '0.0';
 
-  const techCount = (isAdminOrSiteAdmin && insentifList.length > 0) ? insentifList.length : 1;
-  const selisih160 = Math.abs(totalUnitCount - (160 * techCount));
-  const selisih107 = Math.abs(totalUnitCount - (107 * techCount));
+  const selisih160 = Math.abs(totalUnitCount - (160 * activeTechCount));
+  const selisih107 = Math.abs(totalUnitCount - (107 * activeTechCount));
   const calculatedSelisih = `${selisih160} / ${selisih107}`;
 
   DOM.performaContentContainer.innerHTML = `
@@ -3622,10 +3680,9 @@ function renderTagihanTab() {
 
 function getAdminOrSiteAdminStatus() {
   const currentNik = state.profile ? (state.profile.nik || '').toUpperCase().trim() : '';
-  const userAreaUpper = (state.profile ? (state.profile.area || '') : '').toUpperCase().trim();
-  const isSiteAdmin = SITE_CODES.includes(currentNik) || (state.isAdmin && SITE_CODES.includes(userAreaUpper)) || !!state.isSiteAdmin;
   const isGlobalAdmin = currentNik === 'ADMIN';
-  return { isGlobalAdmin, isSiteAdmin, isAdminOrSiteAdmin: isGlobalAdmin || isSiteAdmin || state.isAdmin };
+  const isSiteAdmin = SITE_CODES.includes(currentNik);
+  return { isGlobalAdmin, isSiteAdmin, isAdminOrSiteAdmin: isGlobalAdmin || isSiteAdmin };
 }
 
 function isTechnicianMatch(sheetTech, targetTech) {
@@ -4450,5 +4507,195 @@ function renderPdsChart(pdsList) {
       }
     }
   });
+}
+
+// ==========================================
+// FINISHAN HARIAN (TGL 1-31) RECAP RENDERER
+// ==========================================
+function renderFinishRecapTab() {
+  if (!DOM.finishRecapContentContainer) {
+    DOM.finishRecapContentContainer = document.getElementById('finish-recap-content-container');
+  }
+  if (!DOM.finishRecapContentContainer) return;
+
+  const rowsData = (state.sheetsData && state.sheetsData.rawRowsData) || state.rawRowsData || [];
+  const currentNama = state.profile ? (state.profile.nama || '') : '';
+  const currentNik = state.profile ? (state.profile.nik || '') : '';
+  const nikUpper = currentNik.toUpperCase().trim();
+  const userAreaUpper = (state.profile ? (state.profile.area || '') : '').toUpperCase().trim();
+
+  const isGlobalAdmin = nikUpper === 'ADMIN';
+  const isSiteAdmin = SITE_CODES.includes(nikUpper) || (state.isAdmin && SITE_CODES.includes(userAreaUpper)) || !!state.isSiteAdmin;
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const MONTHS_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  const monthName = MONTHS_ID[month];
+
+  // Parse daily finish entries from Sheet DATA (Rows 1+, Col G to AK / index 6 to 36)
+  const recapByDate = {};
+  let totalValidEntries = 0;
+
+  if (rowsData && rowsData.length > 1) {
+    for (let r = 1; r < rowsData.length; r++) {
+      const row = rowsData[r];
+      if (!row || row.length < 7) continue;
+
+      const techNameRow = String(row[0] || '').trim();
+      if (!techNameRow || techNameRow.toUpperCase() === 'NAMA TEKNISI') continue;
+
+      // Filter according to user role
+      if (!isGlobalAdmin && !isMatchForCurrentRole(techNameRow)) continue;
+
+      // Loop columns G to AK (index 6 to 36)
+      const maxCol = Math.min(row.length - 1, 36);
+      for (let c = 6; c <= maxCol; c++) {
+        const valStr = String(row[c] !== undefined && row[c] !== null ? row[c] : '').trim();
+        const numVal = parseInt(valStr, 10) || 0;
+
+        // Skip 0, empty, 'False', or non-positive values
+        if (!valStr || valStr === '0' || valStr === 'False' || numVal <= 0) continue;
+
+        // Determine Day Number
+        let dayNum = c - 5; // Default: Col 6 (G) = Day 1, Col 36 (AK) = Day 31
+        if (rowsData[0] && rowsData[0][c]) {
+          const headerVal = String(rowsData[0][c]).replace(/[^0-9]/g, '');
+          if (headerVal) {
+            const parsedDay = parseInt(headerVal, 10);
+            if (parsedDay >= 1 && parsedDay <= 31) dayNum = parsedDay;
+          }
+        }
+
+        if (dayNum < 1 || dayNum > daysInMonth) continue;
+
+        const dayStr = String(dayNum).padStart(2, '0');
+        const monthStr = String(month + 1).padStart(2, '0');
+        const isoDate = `${year}-${monthStr}-${dayStr}`;
+
+        if (!recapByDate[isoDate]) recapByDate[isoDate] = [];
+        recapByDate[isoDate].push({
+          nama: techNameRow,
+          output: numVal,
+          rawVal: valStr,
+          day: dayNum
+        });
+
+        totalValidEntries++;
+      }
+    }
+  }
+
+  // Cross-reference with detailed logs from FINISH sheet if present
+  const detailedLogsByDateTech = {};
+  (state.finishParsedAllRows || []).forEach(item => {
+    if (item && item.tglLaporan && item.nama) {
+      const key = `${item.tglLaporan}_${item.nama.toUpperCase().trim()}`;
+      detailedLogsByDateTech[key] = item;
+    }
+  });
+
+  const badgeEl = document.getElementById('finish-recap-badge');
+  if (badgeEl) {
+    badgeEl.style.display = 'none';
+  }
+
+  // Header Summary Card
+  let html = `
+    <div style="background:var(--bg-card); border-left:4px solid var(--primary); padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-color); display:flex; flex-direction:column; gap:4px; box-shadow:var(--shadow-main);">
+      <div class="flex-between align-center">
+        <span style="font-size:12px; font-weight:800; color:var(--text-main);">REKAP FINISHAN HARIAN (${monthName.toUpperCase()} ${year})</span>
+      </div>
+    </div>
+  `;
+
+  // Get active dates that have non-zero entries, sorted descending by day
+  const activeDates = Object.keys(recapByDate).sort((a, b) => b.localeCompare(a));
+
+  if (activeDates.length === 0) {
+    html += `
+      <div style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:24px 12px; text-align:center; color:var(--text-muted); margin-top:8px;">
+        <i data-lucide="inbox" style="width:36px; height:36px; margin-bottom:6px; color:var(--text-muted);"></i>
+        <p style="font-weight:700; font-size:13px; margin:0; color:var(--text-main);">Belum Ada Data Finish Harian</p>
+      </div>
+    `;
+  } else {
+    html += `<div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">`;
+
+    activeDates.forEach(isoDate => {
+      const parts = isoDate.split('-');
+      const dayVal = parseInt(parts[2], 10);
+      const dayStr = String(dayVal).padStart(2, '0');
+      const dateObj = new Date(year, month, dayVal);
+      const formattedDate = formatDateIndoFull(dateObj);
+      const isToday = dayVal === now.getDate();
+
+      const dateEntries = recapByDate[isoDate] || [];
+
+      let totalOutputDay = 0;
+      dateEntries.forEach(e => totalOutputDay += e.output);
+
+      let cardBorder = isToday ? 'border:1.5px solid var(--primary);' : 'border:1px solid var(--border-color);';
+
+      html += `
+        <div style="background:var(--bg-card); ${cardBorder} border-radius:var(--radius-sm); padding:10px 12px; box-shadow:var(--shadow-main); display:flex; flex-direction:column; gap:6px;">
+          <div class="flex-between align-center" style="border-bottom:1px dashed var(--border-color); padding-bottom:5px;">
+            <div style="font-size:12px; font-weight:800; color:var(--text-main); display:flex; align-items:center; gap:6px;">
+              <i data-lucide="calendar" style="width:14px; height:14px; color:var(--primary);"></i>
+              <span>TGL ${dayStr} - ${escapeHtml(formattedDate)}</span>
+              ${isToday ? `<span style="font-size:9.5px; background:var(--primary); color:#fff; padding:1px 6px; border-radius:3px; font-weight:800;">HARI INI</span>` : ''}
+            </div>
+            <span style="font-size:10px; font-weight:800; background:var(--primary-light); color:var(--primary); padding:2px 8px; border-radius:4px;">
+              Total: ${totalOutputDay} Unit
+            </span>
+          </div>
+      `;
+
+      dateEntries.forEach(item => {
+        const detailKey = `${isoDate}_${item.nama.toUpperCase().trim()}`;
+        const detailLog = detailedLogsByDateTech[detailKey];
+
+        html += `
+          <div style="background:var(--bg-input); padding:8px 10px; border-radius:4px; border:1px solid var(--border-color); display:flex; flex-direction:column; gap:4px; margin-top:2px;">
+            <div class="flex-between align-center">
+              <span style="font-size:11.5px; font-weight:800; color:var(--text-main);">${escapeHtml(item.nama)}</span>
+              <span style="font-size:11px; font-weight:800; color:var(--success); background:rgba(16, 185, 129, 0.12); padding:2px 6px; border-radius:4px;">
+                ${item.output} Finish
+              </span>
+            </div>
+        `;
+
+        if (detailLog) {
+          html += `
+            <div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:4px; text-align:center; font-size:10px; margin-top:2px;">
+              <div style="background:var(--bg-card); padding:4px; border-radius:4px; border:1px solid var(--border-color);"><span style="color:var(--text-muted); font-size:9px;">OUTDOOR</span><br/><strong style="color:var(--success); font-size:11.5px;">${detailLog.finishOutdoor} / ${detailLog.caseOutdoor}</strong></div>
+              <div style="background:var(--bg-card); padding:4px; border-radius:4px; border:1px solid var(--border-color);"><span style="color:var(--text-muted); font-size:9px;">INDOOR</span><br/><strong style="color:var(--primary); font-size:11.5px;">${detailLog.finishIndoor}</strong></div>
+              <div style="background:var(--bg-card); padding:4px; border-radius:4px; border:1px solid var(--border-color);"><span style="color:var(--text-muted); font-size:9px;">WIP COMP</span><br/><strong style="color:var(--warning); font-size:11.5px;">${detailLog.wipComp}</strong></div>
+              <div style="background:var(--bg-card); padding:4px; border-radius:4px; border:1px solid var(--border-color);"><span style="color:var(--text-muted); font-size:9px;">WIP TECH</span><br/><strong style="color:var(--secondary); font-size:11.5px;">${detailLog.wipTech}</strong></div>
+              <div style="background:var(--bg-card); padding:4px; border-radius:4px; border:1px solid var(--border-color);"><span style="color:var(--text-muted); font-size:9px;">BATAL</span><br/><strong style="color:var(--danger); font-size:11.5px;">${detailLog.batal}</strong></div>
+            </div>
+            ${detailLog.ket ? `<div style="font-size:10px; color:var(--text-muted); font-style:italic; margin-top:2px;"><i data-lucide="message-square" style="width:10px; height:10px; vertical-align:middle; margin-right:3px;"></i>${escapeHtml(detailLog.ket)}</div>` : ''}
+          `;
+        } else {
+          html += `
+            <div style="font-size:10px; color:var(--text-muted); margin-top:1px;">
+              Finish Harian Tanggal ${item.day}: <strong>${item.output} unit</strong>
+            </div>
+          `;
+        }
+
+        html += `</div>`;
+      });
+
+      html += `</div>`;
+    });
+
+    html += `</div>`;
+  }
+
+  DOM.finishRecapContentContainer.innerHTML = html;
+  lucide.createIcons();
 }
 

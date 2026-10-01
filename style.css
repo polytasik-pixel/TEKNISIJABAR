@@ -160,6 +160,7 @@ html[data-active-tab="tab-scan"] #tab-scan,
 html[data-active-tab="tab-history"] #tab-history,
 html[data-active-tab="tab-pending"] #tab-pending,
 html[data-active-tab="tab-performa"] #tab-performa,
+html[data-active-tab="tab-finish-recap"] #tab-finish-recap,
 html[data-active-tab="tab-notif"] #tab-notif,
 html[data-active-tab="tab-part-kembali"] #tab-part-kembali,
 html[data-active-tab="tab-tagihan"] #tab-tagihan,
@@ -197,13 +198,14 @@ html[data-active-tab]:not([data-active-tab="tab-scan"]) #header-psw-status {
 
 html[data-active-tab="tab-pending"] #sheet-update-bar,
 html[data-active-tab="tab-performa"] #sheet-update-bar,
+html[data-active-tab="tab-finish-recap"] #sheet-update-bar,
 html[data-active-tab="tab-notif"] #sheet-update-bar,
 html[data-active-tab="tab-part-kembali"] #sheet-update-bar,
 html[data-active-tab="tab-tagihan"] #sheet-update-bar {
   display: flex !important;
 }
 
-html[data-active-tab]:not([data-active-tab="tab-pending"]):not([data-active-tab="tab-performa"]):not([data-active-tab="tab-notif"]):not([data-active-tab="tab-part-kembali"]):not([data-active-tab="tab-tagihan"]) #sheet-update-bar {
+html[data-active-tab]:not([data-active-tab="tab-pending"]):not([data-active-tab="tab-performa"]):not([data-active-tab="tab-finish-recap"]):not([data-active-tab="tab-notif"]):not([data-active-tab="tab-part-kembali"]):not([data-active-tab="tab-tagihan"]) #sheet-update-bar {
   display: none !important;
 }
 
@@ -219,6 +221,7 @@ html[data-active-tab="tab-menu"] .app-nav {
 /* Mode Teknisi Nav Items */
 html[data-active-tab="tab-pending"] .nav-item[data-mode="teknisi"],
 html[data-active-tab="tab-performa"] .nav-item[data-mode="teknisi"],
+html[data-active-tab="tab-finish-recap"] .nav-item[data-mode="teknisi"],
 html[data-active-tab="tab-notif"] .nav-item[data-mode="teknisi"],
 html[data-active-tab="tab-part-kembali"] .nav-item[data-mode="teknisi"],
 html[data-active-tab="tab-tagihan"] .nav-item[data-mode="teknisi"],
