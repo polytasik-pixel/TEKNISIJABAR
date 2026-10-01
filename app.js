@@ -2027,7 +2027,8 @@ function downloadFinishExcel() {
   ];
 
   const csvLines = [];
-  csvLines.push(headers.map(h => `"${h.replace(/"/g, '""')}"`).join(','));
+  csvLines.push('sep=;'); // Tell MS Excel explicitly to split columns by semicolon
+  csvLines.push(headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(';'));
 
   siteRows.forEach(item => {
     const row = [
@@ -2043,7 +2044,7 @@ function downloadFinishExcel() {
       item.noVisit || 0,
       item.ket || '-'
     ];
-    csvLines.push(row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','));
+    csvLines.push(row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(';'));
   });
 
   const csvContent = '\uFEFF' + csvLines.join('\r\n');
@@ -2061,7 +2062,7 @@ function downloadFinishExcel() {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 
-  showToast(`📥 Berhasil mengunduh ${siteRows.length} data Finish Harian (${fileName})`, 'success');
+  showToast(`📥 Berhasil mengunduh ${siteRows.length} data Finish Harian per kolom (${fileName})`, 'success');
 }
 
 function loadFinishSheetCache() {
