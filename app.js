@@ -818,6 +818,9 @@ function setupEventListeners() {
     DOM.headerBtnProfile.addEventListener('click', () => switchTab('tab-profile'));
   }
 
+  // Header Action Button (Simpan / Install App ke Desktop / Layar HP)
+  initInstallAppEvents();
+
   // Password Visibility Toggle in Profile
   if (DOM.btnTogglePswVisibility) {
     DOM.btnTogglePswVisibility.addEventListener('click', () => {
@@ -832,6 +835,79 @@ function setupEventListeners() {
   if (DOM.btnClearAppCache) {
     DOM.btnClearAppCache.addEventListener('click', handleClearAppCache);
   }
+
+// ==========================================
+// PWA INSTALL / SIMPAN KE LAYAR UTAMA HP & DESKTOP
+// ==========================================
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  console.log('⚡ PWA Install Prompt captured!');
+});
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW reg error:', err));
+  });
+}
+
+function initInstallAppEvents() {
+  const btnInstall = document.getElementById('header-btn-install');
+  const modalGuide = document.getElementById('modal-install-guide');
+  const btnCloseModal = document.getElementById('btn-close-install-modal');
+  const btnDownloadDesktop = document.getElementById('btn-download-desktop-shortcut');
+
+  if (btnInstall) {
+    btnInstall.addEventListener('click', async () => {
+      // 1. Coba panggil prompt native PWA jika didukung browser (Chrome/Edge/Android)
+      if (deferredInstallPrompt) {
+        try {
+          deferredInstallPrompt.prompt();
+          const { outcome } = await deferredInstallPrompt.userChoice;
+          if (outcome === 'accepted') {
+            showToast('✅ Aplikasi berhasil dipasang di Layar Utama!', 'success');
+            deferredInstallPrompt = null;
+            return;
+          }
+        } catch (err) {
+          console.warn('Install prompt error:', err);
+        }
+      }
+
+      // 2. Fallback: Tampilkan modal panduan HP / Shortcut Desktop PC
+      if (modalGuide) {
+        modalGuide.classList.add('active');
+        if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons();
+      }
+    });
+  }
+
+  if (btnCloseModal && modalGuide) {
+    btnCloseModal.addEventListener('click', () => {
+      modalGuide.classList.remove('active');
+    });
+  }
+
+  if (btnDownloadDesktop) {
+    btnDownloadDesktop.addEventListener('click', () => {
+      try {
+        const currentUrl = window.location.href;
+        const shortcutContent = `[InternetShortcut]\nURL=${currentUrl}\nIconIndex=0\n`;
+        const blob = new Blob([shortcutContent], { type: 'application/x-mswinurl' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'Teknisi Jabar.url';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        showToast('💻 File shortcut (.url) berhasil diunduh ke Desktop PC!', 'success');
+      } catch (err) {
+        showToast('Gagal mengunduh shortcut PC', 'error');
+      }
+    });
+  }
+}
 
   let lastBackPressTime = 0;
 
