@@ -836,14 +836,11 @@ function setupEventListeners() {
     DOM.btnClearAppCache.addEventListener('click', handleClearAppCache);
   }
 
-  // Auto-Save Draft & Date Label Listener for Form Finish Harian
+  // Auto-Save Draft Listener for Form Finish Harian
   const formFinish = document.getElementById('form-finish-harian');
   if (formFinish) {
     formFinish.addEventListener('input', saveFinishFormDraft);
-    formFinish.addEventListener('change', () => {
-      saveFinishFormDraft();
-      updateFinishDateLabel();
-    });
+    formFinish.addEventListener('change', saveFinishFormDraft);
   }
 
 // ==========================================
@@ -1886,29 +1883,6 @@ function saveFinishFormDraft() {
   } catch (e) {}
 }
 
-function updateFinishDateLabel() {
-  const lbl = document.getElementById('finish-tgl-label');
-  if (!lbl || !DOM.finishTgl) return;
-  const val = DOM.finishTgl.value;
-  if (!val) {
-    lbl.innerHTML = '';
-    return;
-  }
-  const parts = val.split('-');
-  if (parts.length === 3) {
-    const yyyy = parts[0];
-    const mm = parts[1];
-    const dd = parts[2];
-    const dateObj = new Date(val + 'T00:00:00');
-    const DAYS_ID = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-    const MONTHS_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-    const dayName = !isNaN(dateObj.getTime()) ? DAYS_ID[dateObj.getDay()] : '';
-    const monthName = !isNaN(dateObj.getTime()) ? MONTHS_ID[dateObj.getMonth()] : '';
-
-    lbl.innerHTML = `🗓️ Format Tanggal: <strong>${dd}/${mm}/${yyyy}</strong> (${dayName}, ${parseInt(dd, 10)} ${monthName} ${yyyy})`;
-  }
-}
-
 function prepareFinishForm(isReset = false) {
   if (isReset) {
     try { localStorage.removeItem('teknisi_finish_form_draft'); } catch(e) {}
@@ -1930,7 +1904,6 @@ function prepareFinishForm(isReset = false) {
       const today = new Date().toISOString().split('T')[0];
       DOM.finishTgl.value = today;
     }
-    updateFinishDateLabel();
   }
 
   if (isReset) {
