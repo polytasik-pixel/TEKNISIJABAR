@@ -836,6 +836,16 @@ function setupEventListeners() {
     DOM.btnClearAppCache.addEventListener('click', handleClearAppCache);
   }
 
+  // Auto-Save Draft & Date Label Listener for Form Finish Harian
+  const formFinish = document.getElementById('form-finish-harian');
+  if (formFinish) {
+    formFinish.addEventListener('input', saveFinishFormDraft);
+    formFinish.addEventListener('change', () => {
+      saveFinishFormDraft();
+      updateFinishDateLabel();
+    });
+  }
+
 // ==========================================
 // PWA INSTALL / SIMPAN KE LAYAR UTAMA HP & DESKTOP
 // ==========================================
@@ -1857,27 +1867,93 @@ const VALID_FORM_TECHNICIANS = [
   'Roni Surya Nugraha'
 ];
 
-function prepareFinishForm() {
-  if (DOM.finishTgl) {
-    if (!DOM.finishTgl.value) {
-      const today = new Date().toISOString().split('T')[0];
-      DOM.finishTgl.type = 'date';
-      DOM.finishTgl.value = today;
-    } else {
-      DOM.finishTgl.type = 'date';
-    }
+function saveFinishFormDraft() {
+  if (!DOM.finishTgl) return;
+  const draft = {
+    finishTgl: DOM.finishTgl ? DOM.finishTgl.value : '',
+    caseOutdoor: DOM.finishCaseOutdoor ? DOM.finishCaseOutdoor.value : '',
+    finishOutdoor: DOM.finishFinishOutdoor ? DOM.finishFinishOutdoor.value : '',
+    finishIndoor: DOM.finishFinishIndoor ? DOM.finishFinishIndoor.value : '',
+    wipComp: DOM.finishWipComp ? DOM.finishWipComp.value : '',
+    wipTech: DOM.finishWipTech ? DOM.finishWipTech.value : '',
+    batal: DOM.finishBatal ? DOM.finishBatal.value : '',
+    antar: DOM.finishAntar ? DOM.finishAntar.value : '',
+    noVisit: DOM.finishNoVisit ? DOM.finishNoVisit.value : '',
+    ket: DOM.finishKet ? DOM.finishKet.value : ''
+  };
+  try {
+    localStorage.setItem('teknisi_finish_form_draft', JSON.stringify(draft));
+  } catch (e) {}
+}
+
+function updateFinishDateLabel() {
+  const lbl = document.getElementById('finish-tgl-label');
+  if (!lbl || !DOM.finishTgl) return;
+  const val = DOM.finishTgl.value;
+  if (!val) {
+    lbl.innerHTML = '';
+    return;
+  }
+  const parts = val.split('-');
+  if (parts.length === 3) {
+    const yyyy = parts[0];
+    const mm = parts[1];
+    const dd = parts[2];
+    const dateObj = new Date(val + 'T00:00:00');
+    const DAYS_ID = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const MONTHS_ID = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    const dayName = !isNaN(dateObj.getTime()) ? DAYS_ID[dateObj.getDay()] : '';
+    const monthName = !isNaN(dateObj.getTime()) ? MONTHS_ID[dateObj.getMonth()] : '';
+
+    lbl.innerHTML = `🗓️ Format Tanggal: <strong>${dd}/${mm}/${yyyy}</strong> (${dayName}, ${parseInt(dd, 10)} ${monthName} ${yyyy})`;
+  }
+}
+
+function prepareFinishForm(isReset = false) {
+  if (isReset) {
+    try { localStorage.removeItem('teknisi_finish_form_draft'); } catch(e) {}
   }
 
-  // Clear numeric inputs so they are empty by default (no 0)
-  if (DOM.finishCaseOutdoor) DOM.finishCaseOutdoor.value = '';
-  if (DOM.finishFinishOutdoor) DOM.finishFinishOutdoor.value = '';
-  if (DOM.finishFinishIndoor) DOM.finishFinishIndoor.value = '';
-  if (DOM.finishWipComp) DOM.finishWipComp.value = '';
-  if (DOM.finishWipTech) DOM.finishWipTech.value = '';
-  if (DOM.finishBatal) DOM.finishBatal.value = '';
-  if (DOM.finishAntar) DOM.finishAntar.value = '';
-  if (DOM.finishNoVisit) DOM.finishNoVisit.value = '';
-  if (DOM.finishKet) DOM.finishKet.value = '';
+  let draft = null;
+  if (!isReset) {
+    try {
+      const rawDraft = localStorage.getItem('teknisi_finish_form_draft');
+      if (rawDraft) draft = JSON.parse(rawDraft);
+    } catch(e) {}
+  }
+
+  if (DOM.finishTgl) {
+    DOM.finishTgl.type = 'date';
+    if (draft && draft.finishTgl) {
+      DOM.finishTgl.value = draft.finishTgl;
+    } else if (!DOM.finishTgl.value) {
+      const today = new Date().toISOString().split('T')[0];
+      DOM.finishTgl.value = today;
+    }
+    updateFinishDateLabel();
+  }
+
+  if (isReset) {
+    if (DOM.finishCaseOutdoor) DOM.finishCaseOutdoor.value = '';
+    if (DOM.finishFinishOutdoor) DOM.finishFinishOutdoor.value = '';
+    if (DOM.finishFinishIndoor) DOM.finishFinishIndoor.value = '';
+    if (DOM.finishWipComp) DOM.finishWipComp.value = '';
+    if (DOM.finishWipTech) DOM.finishWipTech.value = '';
+    if (DOM.finishBatal) DOM.finishBatal.value = '';
+    if (DOM.finishAntar) DOM.finishAntar.value = '';
+    if (DOM.finishNoVisit) DOM.finishNoVisit.value = '';
+    if (DOM.finishKet) DOM.finishKet.value = '';
+  } else if (draft) {
+    if (DOM.finishCaseOutdoor && draft.caseOutdoor !== undefined) DOM.finishCaseOutdoor.value = draft.caseOutdoor;
+    if (DOM.finishFinishOutdoor && draft.finishOutdoor !== undefined) DOM.finishFinishOutdoor.value = draft.finishOutdoor;
+    if (DOM.finishFinishIndoor && draft.finishIndoor !== undefined) DOM.finishFinishIndoor.value = draft.finishIndoor;
+    if (DOM.finishWipComp && draft.wipComp !== undefined) DOM.finishWipComp.value = draft.wipComp;
+    if (DOM.finishWipTech && draft.wipTech !== undefined) DOM.finishWipTech.value = draft.wipTech;
+    if (DOM.finishBatal && draft.batal !== undefined) DOM.finishBatal.value = draft.batal;
+    if (DOM.finishAntar && draft.antar !== undefined) DOM.finishAntar.value = draft.antar;
+    if (DOM.finishNoVisit && draft.noVisit !== undefined) DOM.finishNoVisit.value = draft.noVisit;
+    if (DOM.finishKet && draft.ket !== undefined) DOM.finishKet.value = draft.ket;
+  }
 
   if (DOM.finishNama) {
     const nikUpper = (state.profile ? state.profile.nik || '' : '').toUpperCase().trim();
@@ -2550,7 +2626,7 @@ async function handleSubmitFinish() {
     } catch (e) {}
   }
 
-  prepareFinishForm();
+  prepareFinishForm(true);
   renderFinishHistory();
 
   fetchFinishSheetData().then(({ filledDatesSet, parsedAllRows }) => {

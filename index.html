@@ -493,11 +493,12 @@
 
                 <!-- Tanggal -->
                 <div class="form-group">
-                  <label for="finish-tgl">Tanggal Laporan</label>
+                  <label for="finish-tgl">Tanggal Laporan (dd/mm/yyyy)</label>
                   <div class="input-icon-wrapper">
                     <i data-lucide="calendar" class="input-icon"></i>
-                    <input type="text" id="finish-tgl" class="custom-select" placeholder="dd/mm/yyyy" style="padding-left:36px;" required onfocus="(this.type='date')" onblur="if(!this.value)this.type='text'" onchange="if(!this.value)this.type='text'" />
+                    <input type="date" id="finish-tgl" class="custom-select" style="padding-left:36px; font-weight:700; color:var(--primary);" required />
                   </div>
+                  <div id="finish-tgl-label" style="font-size:11.5px; font-weight:700; color:var(--primary); margin-top:5px;"></div>
                 </div>
 
                 <!-- Questions Grid -->
