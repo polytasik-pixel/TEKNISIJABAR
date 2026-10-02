@@ -2570,20 +2570,23 @@ function cleanNameString(str) {
 
 function isSameTechnicianName(sheetNama, targetNama) {
   if (!sheetNama || !targetNama) return false;
-  const sUpper = String(sheetNama).trim().toUpperCase();
-  const tUpper = String(targetNama).trim().toUpperCase();
-  if (!sUpper || !tUpper) return false;
-  if (sUpper === 'ADMIN' || tUpper === 'ADMIN') return false;
-  if (sUpper === tUpper) return true;
-  if (sUpper.includes(tUpper) || tUpper.includes(sUpper)) return true;
-  const sWords = cleanNameString(sheetNama).split(' ').filter(w => w.length >= 2);
-  const tWords = cleanNameString(targetNama).split(' ').filter(w => w.length >= 2);
-  for (let tw of tWords) {
-    for (let sw of sWords) {
-      if (sw === tw) return true;
-    }
+  const sClean = cleanNameString(sheetNama);
+  const tClean = cleanNameString(targetNama);
+  if (!sClean || !tClean) return false;
+  if (sClean === 'ADMIN' || tClean === 'ADMIN') return false;
+  if (sClean === tClean) return true;
+
+  const sWords = sClean.split(' ').filter(w => w.length >= 2);
+  const tWords = tClean.split(' ').filter(w => w.length >= 2);
+
+  if (sWords.length === 0 || tWords.length === 0) return false;
+
+  // Presisi Ketat: Jika target nama memiliki >= 2 kata, wajib cocok SEMUA kata
+  if (tWords.length >= 2) {
+    return tWords.every(tw => sWords.includes(tw));
   }
-  return false;
+  // Jika 1 kata saja, wajib cocok persis dengan salah satu kata tunggal (dan panjang kata >= 3)
+  return sWords.length === 1 && tWords.length === 1 && sWords[0] === tWords[0];
 }
 
 function getTechnicianRegisteredArea(techName) {
@@ -2638,7 +2641,7 @@ function matchTechName(sheetName, userName, userNik = '') {
   const uUpper = (userName || '').toUpperCase().trim();
   const nUpper = (userNik || '').toUpperCase().trim();
 
-  // If filter is empty ("") or user is global admin (and not filtering for a specific technician name)
+  // Jika tidak ada kriteria filter yang diisi atau admin global
   if (!uUpper && !nUpper) return true;
   if (uUpper === 'ADMIN' || nUpper === 'ADMIN') return true;
 
@@ -2646,44 +2649,46 @@ function matchTechName(sheetName, userName, userNik = '') {
 
   const sClean = cleanNameString(sheetName);
   const uClean = cleanNameString(userName);
-  const nClean = cleanNameString(userNik);
+  const nClean = cleanNumberString(userNik);
 
   if (!sClean) return false;
 
-  // 1. Direct match with NIK if available in sheet cell
+  // 1. Prioritas NIK: Match persis NIK jika cell memuat NIK
   if (nClean && nClean.length >= 3 && (sClean === nClean || sClean.includes(nClean))) {
     return true;
   }
 
   if (!uClean) return false;
 
-  // 2. Direct equality or substring match
-  if (sClean === uClean || sClean.includes(uClean) || uClean.includes(sClean)) {
+  // 2. Pencocokan Persis (Exact Clean Match)
+  if (sClean === uClean) {
     return true;
   }
 
-  // 3. Token Word Match (Require exact word token equality to prevent false positives like MAULIDANI matching DANI)
+  // 3. Pencocokan Kata Ketat (Strict All-Word Coverage):
+  // Menghindari "BUDI SANTOSO" salah cocok dengan "BUDI SETIAWAN"
   const sWords = sClean.split(' ').filter(w => w.length >= 2);
   const uWords = uClean.split(' ').filter(w => w.length >= 2);
 
   if (sWords.length === 0 || uWords.length === 0) return false;
 
-  for (let uWord of uWords) {
-    if (uWord.length < 2) continue;
-    for (let sWord of sWords) {
-      if (sWord.length < 2) continue;
-
-      // Exact word match
-      if (sWord === uWord) {
-        return true;
-      }
-    }
+  // Jika nama user memuat >= 2 kata, WAJIB semua kata ada di nama sheet
+  if (uWords.length >= 2) {
+    const allWordsMatch = uWords.every(uWord => sWords.includes(uWord));
+    if (allWordsMatch) return true;
   }
 
-  // 4. Full string similarity
-  const dist = levenshteinDistance(sClean, uClean);
-  const maxL = Math.max(sClean.length, uClean.length);
-  return ((maxL - dist) / maxL) >= 0.6;
+  // Jika nama user hanya 1 kata, harus cocok persis dengan kata dalam sheet (jika sheet juga 1 kata)
+  if (uWords.length === 1 && sWords.length === 1 && sWords[0] === uWords[0]) {
+    return true;
+  }
+
+  // Substring match hanya untuk nama panjang (>=6 huruf) di mana sClean diawali/diakhiri uClean
+  if (uClean.length >= 6 && (sClean.startsWith(uClean) || sClean.endsWith(uClean))) {
+    return true;
+  }
+
+  return false;
 }
 
 function getBestMatchedItem(items, targetNama, targetNik = '') {
@@ -2702,15 +2707,23 @@ function getBestMatchedItem(items, targetNama, targetNik = '') {
     let score = 0;
 
     if (nClean && nClean.length >= 3 && sClean.includes(nClean)) score += 100;
-    if (sClean === uClean) score += 50;
-    else if (sClean.startsWith(uClean) || uClean.startsWith(sClean)) score += 30;
-    else if (sClean.includes(uClean) || uClean.includes(sClean)) score += 20;
+    if (sClean === uClean) score += 80;
+    else if (sClean.startsWith(uClean) || uClean.startsWith(sClean)) score += 40;
 
     let matchCount = 0;
     for (let uw of uWords) {
       if (sWords.has(uw)) matchCount++;
     }
-    score += matchCount * 5;
+
+    // Skor ketat: Hanya berikan poin penuh jika cocok SEMUA kata
+    if (uWords.size >= 2 && matchCount === uWords.size) {
+      score += 50;
+    } else if (uWords.size === 1 && matchCount === 1 && sWords.size === 1) {
+      score += 30;
+    } else if (uWords.size >= 2 && matchCount < uWords.size) {
+      // Penalti jika hanya cocok sebagian kata agar tidak salah orang
+      score -= 50;
+    }
 
     if (score > bestScore && score > 0) {
       bestScore = score;
@@ -2849,21 +2862,25 @@ function parseCSVToMatrix(csvText) {
 }
 
 async function fetchSheetMatrix(sheetName, range = '') {
-  // Strategy 1: Apps Script Web App API (Always returns 100% evaluated live data with CORS access everywhere!)
+  // Strategy 1: Apps Script Web App API (Returns 100% evaluated live data including PDS formulas)
   if (typeof APPS_SCRIPT_WEB_APP_URL !== 'undefined' && APPS_SCRIPT_WEB_APP_URL && APPS_SCRIPT_WEB_APP_URL.trim() !== '') {
     try {
       const resp = await fetch(APPS_SCRIPT_WEB_APP_URL);
-      if (resp.ok) {
+      if (resp && resp.ok) {
         const json = await resp.json();
         if (json && json.status === 'success') {
-          if (sheetName.toUpperCase() === 'DATA' && json.data && json.data.length > 0) return json.data;
-          if (sheetName.toUpperCase() === 'NOTIF' && json.notif && json.notif.length > 0) return json.notif;
+          if (sheetName.toUpperCase() === 'DATA' && json.data && Array.isArray(json.data) && json.data.length > 0) {
+            return json.data;
+          }
+          if (sheetName.toUpperCase() === 'NOTIF' && json.notif && Array.isArray(json.notif) && json.notif.length > 0) {
+            return json.notif;
+          }
         }
       }
     } catch (e) {}
   }
 
-  // Strategy 2: JSONP Script Injection Fallback (Bypasses CORS policy restrictions cleanly without console errors)
+  // Strategy 2: JSONP Script Injection Fallback
   try {
     const table = await fetchGVizSheet(sheetName, range || 'A1:BZ2000');
     return extractMatrixFromGViz(table);
@@ -2888,11 +2905,6 @@ async function fetchGoogleSheetsData() {
     syncUserProfileAreaFromSheet();
 
     // 0. Direct Cell Extraction for Timestamps from Col AY (Index 50)
-    // AY2 (Row index 1) = PAGE PENDING
-    // AY3 (Row index 2) = PAGE PERFORMA
-    // AY4 (Row index 3) = PART BELUM KEMBALI
-    // AY5 (Row index 4) = PAGE TAGIHAN
-
     const defaultTs = 'Update Tanggal ' + new Date().toLocaleDateString('id-ID');
 
     let pendingTimestamp = (rowsData && rowsData.length > 1 && rowsData[1] && rowsData[1][50]) ? String(rowsData[1][50]).trim() : '';
@@ -2983,7 +2995,6 @@ async function fetchGoogleSheetsData() {
 
       if (noInvoice.toUpperCase() === 'NO INVOICE' || valAV.toUpperCase() === 'TEKNISI' || valAW.toUpperCase() === 'TEKNISI') continue;
 
-      // Smart detection: determine which column is Technician Name vs Nominal Amount
       let techNameRow = valAW;
       let jumlahVal = valAV;
 
@@ -3013,7 +3024,6 @@ async function fetchGoogleSheetsData() {
     const insentifRows = [];
     const outputHariIni = [];
 
-    // Dynamically match Today's Date column (Cols G to AK / index 6 to 36)
     const todayDay = new Date().getDate();
     let todayColIdx = -1;
 
@@ -3029,13 +3039,13 @@ async function fetchGoogleSheetsData() {
       }
     }
     if (todayColIdx === -1) {
-      todayColIdx = 5 + todayDay; // Fallback: Day 1 = Col 6 (G), Day 31 = Col 36 (AK)
+      todayColIdx = 5 + todayDay;
     }
 
     for (let r = 1; r < rowsData.length; r++) {
       const row = rowsData[r];
       if (!row || row.length < 6) continue;
-      const techNameRow = (row[0] || '').trim(); // Col A: NAMA TEKNISI (Index 0)
+      const techNameRow = (row[0] || '').trim();
       if (!techNameRow || techNameRow.toUpperCase() === 'NAMA TEKNISI') continue;
 
       const indoorCount = parseInt(row[1] || '0', 10) || 0;
@@ -3043,7 +3053,6 @@ async function fetchGoogleSheetsData() {
       const acCount = parseInt(row[3] || '0', 10) || 0;
       const evCount = parseInt(row[4] || '0', 10) || 0;
 
-      // Output Hari Ini fetched specifically from Today's Date Column
       const todayOutputVal = (row[todayColIdx] !== undefined && row[todayColIdx] !== null) ? String(row[todayColIdx]).trim() : '0';
 
       insentifRows.push({
@@ -3084,18 +3093,34 @@ async function fetchGoogleSheetsData() {
       }
     }
 
-    // 6. Pencapaian PDS (Sheet DATA, Column AL / Index 37)
+    // 6. Pencapaian PDS (Sheet DATA, Column AL / Index 37 or scan row)
     const pdsRows = [];
     if (rowsData && rowsData.length > 0) {
       for (let r = 0; r < rowsData.length; r++) {
-        const cellVal = (rowsData[r] && rowsData[r][37] !== undefined) ? String(rowsData[r][37]).trim() : '';
+        const row = rowsData[r];
+        if (!row || row.length === 0) continue;
+
+        let colIdx = 37;
+        let cellVal = (row[colIdx] !== undefined && row[colIdx] !== null) ? String(row[colIdx]).trim() : '';
+
+        if (!cellVal.toUpperCase().startsWith('LOAD ')) {
+          for (let c = 0; c < row.length; c++) {
+            const v = String(row[c] || '').trim();
+            if (v.toUpperCase().startsWith('LOAD ')) {
+              colIdx = c;
+              cellVal = v;
+              break;
+            }
+          }
+        }
+
         if (cellVal.toUpperCase().startsWith('LOAD ')) {
           let siteName = cellVal.replace(/^LOAD\s+/i, '').trim();
           siteName = siteName.replace(/[\s,]+dkk.*$/i, '').trim();
 
-          const loadValRaw = (rowsData[r + 1] && rowsData[r + 1][37] !== undefined) ? String(rowsData[r + 1][37]).trim() : '0';
-          const pendingValRaw = (rowsData[r + 2] && rowsData[r + 2][37] !== undefined) ? String(rowsData[r + 2][37]).trim() : '0';
-          const pctValRaw = (rowsData[r + 3] && rowsData[r + 3][37] !== undefined) ? String(rowsData[r + 3][37]).trim() : '0%';
+          const loadValRaw = (rowsData[r + 1] && rowsData[r + 1][colIdx] !== undefined) ? String(rowsData[r + 1][colIdx]).trim() : '0';
+          const pendingValRaw = (rowsData[r + 2] && rowsData[r + 2][colIdx] !== undefined) ? String(rowsData[r + 2][colIdx]).trim() : '0';
+          const pctValRaw = (rowsData[r + 3] && rowsData[r + 3][colIdx] !== undefined) ? String(rowsData[r + 3][colIdx]).trim() : '0%';
 
           const loadNum = parseInt(loadValRaw.replace(/[^0-9]/g, ''), 10) || 0;
           const pendingNum = parseInt(pendingValRaw.replace(/[^0-9]/g, ''), 10) || 0;
@@ -3114,7 +3139,7 @@ async function fetchGoogleSheetsData() {
           if (isNaN(pctNum)) pctNum = 0;
 
           pdsRows.push({
-            site: siteName || 'TSM',
+            site: siteName || 'SITE',
             load: loadNum,
             loadRaw: loadValRaw || '0',
             pending: pendingNum,
