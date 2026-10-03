@@ -3374,7 +3374,7 @@ function startSheetsPolling() {
   state.sheetsPollTimer = setInterval(() => {
     fetchGoogleSheetsData();
     fetchPipoData();
-  }, 5000); // Ambil data otomatis dari Google Sheet setiap 5 detik
+  }, 600000); // Ambil data otomatis dari Google Sheet setiap 10 menit
 }
 
 function stopSheetsPolling() {
