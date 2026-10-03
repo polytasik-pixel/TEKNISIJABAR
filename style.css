@@ -201,11 +201,12 @@ html[data-active-tab="tab-performa"] #sheet-update-bar,
 html[data-active-tab="tab-finish-recap"] #sheet-update-bar,
 html[data-active-tab="tab-notif"] #sheet-update-bar,
 html[data-active-tab="tab-part-kembali"] #sheet-update-bar,
-html[data-active-tab="tab-tagihan"] #sheet-update-bar {
+html[data-active-tab="tab-tagihan"] #sheet-update-bar,
+html[data-active-tab="tab-pencapaian-pds"] #sheet-update-bar {
   display: flex !important;
 }
 
-html[data-active-tab]:not([data-active-tab="tab-pending"]):not([data-active-tab="tab-performa"]):not([data-active-tab="tab-finish-recap"]):not([data-active-tab="tab-notif"]):not([data-active-tab="tab-part-kembali"]):not([data-active-tab="tab-tagihan"]) #sheet-update-bar {
+html[data-active-tab]:not([data-active-tab="tab-pending"]):not([data-active-tab="tab-performa"]):not([data-active-tab="tab-finish-recap"]):not([data-active-tab="tab-notif"]):not([data-active-tab="tab-part-kembali"]):not([data-active-tab="tab-tagihan"]):not([data-active-tab="tab-pencapaian-pds"]) #sheet-update-bar {
   display: none !important;
 }
 

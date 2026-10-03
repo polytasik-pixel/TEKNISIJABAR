@@ -243,6 +243,21 @@ const DOM = {
   btnOpenWaPart: document.getElementById('btn-open-wa-part'),
   btnOpenWaTagihan: document.getElementById('btn-open-wa-tagihan'),
 
+  // WA Status Select Modal Elements
+  modalWaStatusSelect: document.getElementById('modal-wa-status-select'),
+  btnCloseWaStatusModal: document.getElementById('btn-close-wa-status-modal'),
+  btnCancelWaStatus: document.getElementById('btn-cancel-wa-status'),
+  btnConfirmWaStatusSend: document.getElementById('btn-confirm-wa-status-send'),
+  waStatusModalCheckAll: document.getElementById('wa-status-modal-check-all'),
+  waStatusModalChecklist: document.getElementById('wa-status-modal-checklist'),
+
+  // WA Tagihan Select Modal Elements
+  modalWaTagihanSelect: document.getElementById('modal-wa-tagihan-select'),
+  btnCancelWaTagihan: document.getElementById('btn-cancel-wa-tagihan'),
+  btnConfirmWaTagihanSend: document.getElementById('btn-confirm-wa-tagihan-send'),
+  waTagihanModalCheckAll: document.getElementById('wa-tagihan-modal-check-all'),
+  waTagihanModalChecklist: document.getElementById('wa-tagihan-modal-checklist'),
+
   // Pencapaian PDS Elements
   pdsContentContainer: document.getElementById('pds-content-container'),
   btnRefreshPds: document.getElementById('btn-refresh-pds'),
@@ -528,9 +543,18 @@ function setupEventListeners() {
   if (DOM.btnWaFonnteSend) DOM.btnWaFonnteSend.addEventListener('click', handleWaFonnteSend);
   if (DOM.btnWaBatchSend) DOM.btnWaBatchSend.addEventListener('click', handleWaBatchSend);
 
-  if (DOM.btnOpenWaPending) DOM.btnOpenWaPending.addEventListener('click', () => openSendWaConfirmModal());
+  // WA Status Select Modal Event Listeners
+  if (DOM.btnCloseWaStatusModal) DOM.btnCloseWaStatusModal.addEventListener('click', closeWaStatusSelectModal);
+  if (DOM.btnCancelWaStatus) DOM.btnCancelWaStatus.addEventListener('click', closeWaStatusSelectModal);
+  if (DOM.btnConfirmWaStatusSend) DOM.btnConfirmWaStatusSend.addEventListener('click', handleConfirmWaStatusSend);
+
+  // WA Tagihan Select Modal Event Listeners
+  if (DOM.btnCancelWaTagihan) DOM.btnCancelWaTagihan.addEventListener('click', closeWaTagihanSelectModal);
+  if (DOM.btnConfirmWaTagihanSend) DOM.btnConfirmWaTagihanSend.addEventListener('click', handleConfirmWaTagihanSend);
+
+  if (DOM.btnOpenWaPending) DOM.btnOpenWaPending.addEventListener('click', () => openWaStatusSelectModal());
   if (DOM.btnOpenWaPart) DOM.btnOpenWaPart.addEventListener('click', () => openSendWaConfirmModal());
-  if (DOM.btnOpenWaTagihan) DOM.btnOpenWaTagihan.addEventListener('click', () => openSendWaConfirmModal());
+  if (DOM.btnOpenWaTagihan) DOM.btnOpenWaTagihan.addEventListener('click', () => openWaTagihanSelectModal());
 
   if (DOM.btnSelectModeTeknisi) {
     DOM.btnSelectModeTeknisi.addEventListener('click', () => {
@@ -844,36 +868,43 @@ function setupEventListeners() {
   }
 
 // ==========================================
-// PWA INSTALL / SIMPAN KE LAYAR UTAMA HP & DESKTOP
+// PWA INSTALL / SIMPAN KE LAYAR UTAMA (DIRECT NATIVE INSTALL PROMPT)
 // ==========================================
 let deferredInstallPrompt = null;
+
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredInstallPrompt = e;
   console.log('⚡ PWA Install Prompt captured!');
 });
 
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
+// Dynamic Manifest & Service Worker Registration (Avoid CORS warning when opened via file://)
+if (window.location.protocol !== 'file:') {
+  const manifestLink = document.createElement('link');
+  manifestLink.rel = 'manifest';
+  manifestLink.href = 'manifest.json';
+  document.head.appendChild(manifestLink);
+
+  if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW reg error:', err));
-  });
+  }
 }
 
 function initInstallAppEvents() {
   const btnInstall = document.getElementById('header-btn-install');
   const modalGuide = document.getElementById('modal-install-guide');
   const btnCloseModal = document.getElementById('btn-close-install-modal');
-  const btnDownloadDesktop = document.getElementById('btn-download-desktop-shortcut');
+  const btnPwaDirectInstall = document.getElementById('btn-pwa-direct-install');
 
+  // Klik tombol Instal APK di Header (HP) -> Langsung trigger PWA prompt jika tersedia, atau buka Modal HP jika belum
   if (btnInstall) {
     btnInstall.addEventListener('click', async () => {
-      // 1. Coba panggil prompt native PWA jika didukung browser (Chrome/Edge/Android)
       if (deferredInstallPrompt) {
         try {
           deferredInstallPrompt.prompt();
           const { outcome } = await deferredInstallPrompt.userChoice;
           if (outcome === 'accepted') {
-            showToast('✅ Aplikasi berhasil dipasang di Layar Utama!', 'success');
+            showToast('✅ Aplikasi berhasil dipasang di Layar Utama HP!', 'success');
             deferredInstallPrompt = null;
             return;
           }
@@ -882,10 +913,32 @@ function initInstallAppEvents() {
         }
       }
 
-      // 2. Fallback: Tampilkan modal panduan HP / Shortcut Desktop PC
+      // Jika direct prompt belum siap (misal Safari iOS / belum trigger), buka Popup Panduan HP
       if (modalGuide) {
         modalGuide.classList.add('active');
         if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons();
+        try { history.pushState({ modalOpen: true, tab: state.activeTab }, '', '#' + state.activeTab); } catch (e) {}
+      }
+    });
+  }
+
+  // Klik tombol "INSTAL APLIKASI DI HP SEKARANG" di dalam Popup
+  if (btnPwaDirectInstall) {
+    btnPwaDirectInstall.addEventListener('click', async () => {
+      if (deferredInstallPrompt) {
+        try {
+          deferredInstallPrompt.prompt();
+          const { outcome } = await deferredInstallPrompt.userChoice;
+          if (outcome === 'accepted') {
+            showToast('✅ Aplikasi berhasil dipasang di Layar Utama HP!', 'success');
+            deferredInstallPrompt = null;
+            if (modalGuide) modalGuide.classList.remove('active');
+          }
+        } catch (err) {
+          console.warn('Install prompt error:', err);
+        }
+      } else {
+        showToast('📲 Silakan ikuti petunjuk menu Titik 3 Chrome / Share Safari di bawah ini.', 'info');
       }
     });
   }
@@ -895,43 +948,21 @@ function initInstallAppEvents() {
       modalGuide.classList.remove('active');
     });
   }
-
-  if (btnDownloadDesktop) {
-    btnDownloadDesktop.addEventListener('click', () => {
-      try {
-        const currentUrl = window.location.href;
-        const shortcutContent = `[InternetShortcut]\nURL=${currentUrl}\nIconIndex=0\n`;
-        const blob = new Blob([shortcutContent], { type: 'application/x-mswinurl' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'Teknisi Jabar.url';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        showToast('💻 File shortcut (.url) berhasil diunduh ke Desktop PC!', 'success');
-      } catch (err) {
-        showToast('Gagal mengunduh shortcut PC', 'error');
-      }
-    });
-  }
 }
 
   let lastBackPressTime = 0;
 
-  // Android & Hardware Back Button Navigation Handler
+  // Android & Hardware Back Button Navigation Handler (Close Modals on Back)
   window.addEventListener('popstate', (e) => {
-    if (!state.isLoggedIn) return;
-
-    // Close active modals first if open
-    if (DOM.modalMissingFinish && DOM.modalMissingFinish.classList.contains('active')) {
-      closeMissingModal(false);
-      return;
-    }
-    if (DOM.modalConfirm && DOM.modalConfirm.classList.contains('active')) {
-      closeSubmitConfirmModal();
+    // 1. TAMPILKAN POPUP MODAL SAAT DIBUKA: BILA TEKAN TOMBOL BACK (HP/BROWSER) -> TUTUP POPUP TERLEBIH DAHULU!
+    const activeModals = document.querySelectorAll('.modal-overlay.active');
+    if (activeModals.length > 0) {
+      activeModals.forEach(modal => modal.classList.remove('active'));
       try { history.pushState({ tab: state.activeTab }, '', '#' + state.activeTab); } catch (err) {}
       return;
     }
+
+    if (!state.isLoggedIn) return;
 
     // Intercept Back when at Main Menu (tab-menu)
     if (state.activeTab === 'tab-menu') {
@@ -954,6 +985,16 @@ function initInstallAppEvents() {
 
     let targetTab = (e.state && e.state.tab) ? e.state.tab : 'tab-menu';
     switchTab(targetTab, false);
+  });
+
+  // Tombol Escape di Keyboard PC -> Tutup semua popup modal yang aktif
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const activeModals = document.querySelectorAll('.modal-overlay.active');
+      if (activeModals.length > 0) {
+        activeModals.forEach(modal => modal.classList.remove('active'));
+      }
+    }
   });
 }
 
@@ -1367,6 +1408,13 @@ function updateModeNavVisibility(targetTabId) {
     DOM.headerBtnMissing.classList.toggle('hidden', targetTabId !== 'tab-finish');
   }
 
+  // 1b. Header Instal APK Button (#header-btn-install)
+  // Show ONLY on Menu Utama Hub (tab-menu). Hide on all sub-pages.
+  const btnInstallEl = document.getElementById('header-btn-install');
+  if (btnInstallEl) {
+    btnInstallEl.style.display = (targetTabId === 'tab-menu') ? 'inline-flex' : 'none';
+  }
+
   // 2. Header Bell Notification Button (#header-notif-btn)
   // Show ONLY when in teknisi mode (Pending / Performa / Notif), hide in menu hub!
   if (DOM.headerNotifBtn) {
@@ -1383,9 +1431,10 @@ function updateModeNavVisibility(targetTabId) {
   // 4. On sub-pages, show bottom navbar
   if (DOM.appNav) DOM.appNav.classList.remove('hidden');
 
-  // Show sheet update bar only when in teknisi mode
+  // Show sheet update bar on sub-pages (Pending, Performa, Part, Tagihan, PDS, etc.)
   if (DOM.sheetUpdateBar) {
-    DOM.sheetUpdateBar.classList.toggle('hidden', state.currentMode !== 'teknisi');
+    const showBar = state.currentMode === 'teknisi' || state.currentMode === 'pds' || targetTabId === 'tab-pencapaian-pds';
+    DOM.sheetUpdateBar.classList.toggle('hidden', !showBar);
   }
 
   // Filter individual navbar items according to active mode
@@ -3354,11 +3403,13 @@ function renderSheetUpdateInfo() {
   const performaTs = state.sheetsData.performaTimestamp || pendingTs;
   const partKembaliTs = state.sheetsData.partKembaliTimestamp || pendingTs;
   const tagihanTs = state.sheetsData.tagihanTimestamp || pendingTs;
+  const pdsTs = state.sheetsData.pdsTimestamp || performaTs || pendingTs;
 
   let activeTs = pendingTs;
   if (state.activeTab === 'tab-performa') activeTs = performaTs;
   else if (state.activeTab === 'tab-part-kembali') activeTs = partKembaliTs;
   else if (state.activeTab === 'tab-tagihan') activeTs = tagihanTs;
+  else if (state.activeTab === 'tab-pencapaian-pds') activeTs = pdsTs;
 
   let displayTs = activeTs;
   if (displayTs && !displayTs.toLowerCase().includes('update')) {
@@ -3923,12 +3974,59 @@ function isTechnicianMatch(sheetTech, targetTech) {
   return false;
 }
 
-function buildTechnicianWaMessage(targetTechName, contextTab = '') {
+function getSelectedWaPendingStatuses() {
+  const checklistEl = document.getElementById('wa-status-checklist');
+  if (!checklistEl) return null;
+  const checkedCbs = checklistEl.querySelectorAll('.wa-status-item-cb:checked');
+  return Array.from(checkedCbs).map(cb => cb.value.toUpperCase().trim());
+}
+
+function getTagihanCategory(namaKonsumen) {
+  const upper = (namaKonsumen || '').toUpperCase().trim();
+  if (upper.includes('GONUSA')) {
+    return 'PT. GONUSA PRIMA DISTRIBUSI';
+  }
+  if (upper.includes('SUMBER CIPTA') || upper.includes('MULTINIAGA')) {
+    return 'SUMBER CIPTA MULTINIAGA';
+  }
+  if (upper.includes('HARTONO') || upper.includes('POLYTRON')) {
+    return 'PT. HARTONO ISTANA TEKNOLOGI';
+  }
+  return 'DIRECT KONSUMEN';
+}
+
+const TAGIHAN_CATEGORIES = [
+  'PT. GONUSA PRIMA DISTRIBUSI',
+  'SUMBER CIPTA MULTINIAGA',
+  'PT. HARTONO ISTANA TEKNOLOGI',
+  'DIRECT KONSUMEN'
+];
+
+function buildTechnicianWaMessage(targetTechName, contextTab = '', selectedStatuses = null) {
   if (!targetTechName) return '';
   const activeTab = contextTab || state.activeTab || 'tab-pending';
 
-  const pendingCases = (state.sheetsData.pendingCases || []).filter(item => isTechnicianMatch(item.teknisi, targetTechName));
-  const tagihanRows = (state.sheetsData.tagihanRows || []).filter(item => isTechnicianMatch(item.teknisi, targetTechName));
+  const allTechPending = (state.sheetsData.pendingCases || []).filter(item => isTechnicianMatch(item.teknisi, targetTechName));
+  const activeSelectedStatuses = selectedStatuses !== null ? selectedStatuses : getSelectedWaPendingStatuses();
+
+  let pendingCases = allTechPending;
+  if (activeSelectedStatuses !== null && activeSelectedStatuses.length >= 0) {
+    pendingCases = allTechPending.filter(item => {
+      const st = (item.status || 'PENDING').toUpperCase().trim();
+      return activeSelectedStatuses.includes(st);
+    });
+  }
+
+  const allTechTagihan = (state.sheetsData.tagihanRows || []).filter(item => isTechnicianMatch(item.teknisi, targetTechName));
+  let tagihanRows = allTechTagihan;
+  const activeSelectedTagihanCats = state.selectedWaTagihanCategories || null;
+  if (activeSelectedTagihanCats !== null && Array.isArray(activeSelectedTagihanCats)) {
+    tagihanRows = allTechTagihan.filter(item => {
+      const cat = getTagihanCategory(item.namaKonsumen).toUpperCase().trim();
+      return activeSelectedTagihanCats.includes(cat);
+    });
+  }
+
   const partBelumKembali = (state.sheetsData.partBelumKembali || []).filter(item => isTechnicianMatch(item.teknisi, targetTechName));
 
   let msg = `Halo *${targetTechName}*,\n\n`;
@@ -3965,7 +4063,7 @@ function buildTechnicianWaMessage(targetTechName, contextTab = '') {
     if (pendingCases.length > 0) {
       msg += `\n📋 *CASE PENDING* (${pendingCases.length} Case):\n`;
       pendingCases.forEach((item, idx) => {
-        msg += `${idx + 1}. Case: *${item.no_case || '-'}* | Type: ${item.type || '-'} | Seri: ${item.seri || '-'} | SCL: ${item.scl || '-'}\n`;
+        msg += `${idx + 1}. Case: *${item.no_case || '-'}* | Type: ${item.type || '-'} | Seri: ${item.seri || '-'} | Status: ${item.status || '-'}\n`;
       });
     }
     if (tagihanRows.length > 0) {
@@ -4081,7 +4179,7 @@ function openSendWaConfirmModal() {
   const techNamesStr = siteTechList.length <= 3 ? ` (${siteTechList.join(', ')})` : '';
 
   if (DOM.modalConfirmTitle) DOM.modalConfirmTitle.innerHTML = `<i data-lucide="message-square"></i> Konfirmasi Kirim WA ${menuLabel}`;
-  if (DOM.modalConfirmMsg) DOM.modalConfirmMsg.textContent = `Apakah Anda Yakin Ingin Mengirimkan Pesan WhatsApp ${menuLabel} ke ${siteTechList.length} Teknisi${techNamesStr} di Site [${state.targetSiteName}]?`;
+  if (DOM.modalConfirmMsg) DOM.modalConfirmMsg.textContent = `Apakah Anda Yakin Ingin Mengirimkan Pesan WhatsApp ${menuLabel}?`;
   if (DOM.modalConfirmOkText) DOM.modalConfirmOkText.textContent = 'Ya, Kirim WA Sekarang';
   if (DOM.modalConfirm) DOM.modalConfirm.classList.add('active');
   if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons();
@@ -4241,6 +4339,53 @@ window.openWaModal = function(preSelectedTechName = '') {
     }
   }
 
+  // Populate status checklist dynamically from pendingCases
+  const allPendingStatuses = new Set();
+  (state.sheetsData.pendingCases || []).forEach(i => {
+    const st = (i.status || 'PENDING').toUpperCase().trim();
+    if (st) allPendingStatuses.add(st);
+  });
+
+  const checklistEl = document.getElementById('wa-status-checklist');
+  const checkAllEl = document.getElementById('wa-check-all-status');
+  const statusArray = Array.from(allPendingStatuses).sort();
+
+  if (checklistEl) {
+    if (statusArray.length === 0) {
+      checklistEl.innerHTML = `<span style="font-size:10.5px; color:var(--text-muted);">Tidak ada status pending</span>`;
+    } else {
+      const activeSelected = state.selectedWaPendingStatuses || null;
+      checklistEl.innerHTML = statusArray.map(st => {
+        const isChecked = activeSelected === null || activeSelected.includes(st);
+        return `
+          <label style="font-size: 10.5px; background: var(--bg-card); border: 1px solid var(--border-color); padding: 5px 8px; border-radius: 4px; display: flex; align-items: center; justify-content: flex-start; gap: 6px; cursor: pointer; color: var(--text-main); font-weight: 600; width: 100%; box-sizing: border-box;">
+            <input type="checkbox" class="wa-status-item-cb" value="${escapeHtml(st)}" ${isChecked ? 'checked' : ''} style="flex-shrink:0;" />
+            <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(st)}</span>
+          </label>
+        `;
+      }).join('');
+    }
+
+    if (checkAllEl) {
+      checkAllEl.checked = true;
+      checkAllEl.onchange = function() {
+        const itemCbs = checklistEl.querySelectorAll('.wa-status-item-cb');
+        itemCbs.forEach(cb => cb.checked = checkAllEl.checked);
+        updateWaModalFields();
+      };
+    }
+
+    checklistEl.onchange = function(e) {
+      if (e.target && e.target.classList.contains('wa-status-item-cb')) {
+        const itemCbs = Array.from(checklistEl.querySelectorAll('.wa-status-item-cb'));
+        if (checkAllEl) {
+          checkAllEl.checked = itemCbs.every(cb => cb.checked);
+        }
+        updateWaModalFields();
+      }
+    };
+  }
+
   // Open modal immediately (Instant 0ms popup)
   DOM.modalSendWa.classList.add('active');
   if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons();
@@ -4258,6 +4403,184 @@ window.openWaModal = function(preSelectedTechName = '') {
 function closeWaModal() {
   if (DOM.modalSendWa) DOM.modalSendWa.classList.remove('active');
 }
+
+window.openWaStatusSelectModal = function() {
+  const { isAdminOrSiteAdmin } = getAdminOrSiteAdminStatus();
+  if (!isAdminOrSiteAdmin) {
+    showToast('⚠️ Akses Kirim WA hanya untuk Admin / Site Admin!', 'warning');
+    return;
+  }
+
+  const modal = DOM.modalWaStatusSelect || document.getElementById('modal-wa-status-select');
+  if (!modal) return;
+
+  populateWaStatusChecklist();
+
+  modal.classList.add('active');
+  try {
+    history.pushState({ modalOpen: 'waStatusSelect' }, '', location.href);
+  } catch (err) {}
+};
+
+window.closeWaStatusSelectModal = function() {
+  const modal = DOM.modalWaStatusSelect || document.getElementById('modal-wa-status-select');
+  if (modal) modal.classList.remove('active');
+};
+
+function populateWaStatusChecklist() {
+  const checklistEl = document.getElementById('wa-status-modal-checklist');
+  const checkAllEl = document.getElementById('wa-status-modal-check-all');
+  if (!checklistEl) return;
+
+  const allPendingStatuses = new Set();
+  (state.sheetsData.pendingCases || []).forEach(i => {
+    const st = (i.status || 'PENDING').toUpperCase().trim();
+    if (st) allPendingStatuses.add(st);
+  });
+
+  const statusArray = Array.from(allPendingStatuses).sort();
+
+  if (statusArray.length === 0) {
+    checklistEl.innerHTML = `<span style="font-size:11px; color:var(--text-muted);">Tidak ada status case pending</span>`;
+    return;
+  }
+
+  const currentSelected = state.selectedWaPendingStatuses || null;
+
+  checklistEl.innerHTML = statusArray.map(st => {
+    const isChecked = currentSelected === null || currentSelected.includes(st);
+    return `
+      <label style="font-size: 11px; background: var(--bg-card); border: 1px solid var(--border-color); padding: 6px 8px; border-radius: 4px; display: flex; align-items: center; justify-content: flex-start; gap: 6px; cursor: pointer; color: var(--text-main); font-weight: 600; width: 100%; box-sizing: border-box;">
+        <input type="checkbox" class="wa-status-modal-item-cb" value="${escapeHtml(st)}" ${isChecked ? 'checked' : ''} style="flex-shrink:0;" />
+        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(st)}</span>
+      </label>
+    `;
+  }).join('');
+
+  if (checkAllEl) {
+    const itemCbs = checklistEl.querySelectorAll('.wa-status-modal-item-cb');
+    checkAllEl.checked = Array.from(itemCbs).every(cb => cb.checked);
+
+    checkAllEl.onchange = function() {
+      const cbs = checklistEl.querySelectorAll('.wa-status-modal-item-cb');
+      cbs.forEach(cb => cb.checked = checkAllEl.checked);
+    };
+  }
+
+  checklistEl.onchange = function(e) {
+    if (e.target && e.target.classList.contains('wa-status-modal-item-cb')) {
+      if (checkAllEl) {
+        const itemCbs = Array.from(checklistEl.querySelectorAll('.wa-status-modal-item-cb'));
+        checkAllEl.checked = itemCbs.every(cb => cb.checked);
+      }
+    }
+  };
+}
+
+function handleConfirmWaStatusSend() {
+  const checklistEl = document.getElementById('wa-status-modal-checklist');
+  if (!checklistEl) return;
+
+  const checkedCbs = checklistEl.querySelectorAll('.wa-status-modal-item-cb:checked');
+  const selectedStatuses = Array.from(checkedCbs).map(cb => cb.value.toUpperCase().trim());
+
+  if (selectedStatuses.length === 0) {
+    showToast('⚠️ Pilih minimal 1 status case pending yang akan dikirim!', 'warning');
+    return;
+  }
+
+  state.selectedWaPendingStatuses = selectedStatuses;
+  closeWaStatusSelectModal();
+  openSendWaConfirmModal();
+}
+
+window.openWaTagihanSelectModal = function() {
+  const { isAdminOrSiteAdmin } = getAdminOrSiteAdminStatus();
+  if (!isAdminOrSiteAdmin) {
+    showToast('⚠️ Akses Kirim WA hanya untuk Admin / Site Admin!', 'warning');
+    return;
+  }
+
+  const modal = DOM.modalWaTagihanSelect || document.getElementById('modal-wa-tagihan-select');
+  if (!modal) return;
+
+  populateWaTagihanChecklist();
+
+  modal.classList.add('active');
+  try {
+    history.pushState({ modalOpen: 'waTagihanSelect' }, '', location.href);
+  } catch (err) {}
+};
+
+window.closeWaTagihanSelectModal = function() {
+  const modal = DOM.modalWaTagihanSelect || document.getElementById('modal-wa-tagihan-select');
+  if (modal) modal.classList.remove('active');
+};
+
+function populateWaTagihanChecklist() {
+  const checklistEl = document.getElementById('wa-tagihan-modal-checklist');
+  const checkAllEl = document.getElementById('wa-tagihan-modal-check-all');
+  if (!checklistEl) return;
+
+  const currentSelected = state.selectedWaTagihanCategories || null;
+
+  const displayNames = {
+    'PT. GONUSA PRIMA DISTRIBUSI': '1. PT. GONUSA PRIMA DISTRIBUSI',
+    'SUMBER CIPTA MULTINIAGA': '2. SUMBER CIPTA MULTINIAGA',
+    'PT. HARTONO ISTANA TEKNOLOGI': '3. PT. HARTONO ISTANA TEKNOLOGI',
+    'DIRECT KONSUMEN': '4. DIRECT KONSUMEN'
+  };
+
+  checklistEl.innerHTML = TAGIHAN_CATEGORIES.map(cat => {
+    const catUpper = cat.toUpperCase().trim();
+    const isChecked = currentSelected === null || currentSelected.includes(catUpper);
+    const labelText = displayNames[cat] || cat;
+    return `
+      <label style="font-size: 11.5px; background: var(--bg-card); border: 1px solid var(--border-color); padding: 8px 10px; border-radius: 4px; display: flex; align-items: center; justify-content: flex-start; gap: 8px; cursor: pointer; color: var(--text-main); font-weight: 600; width: 100%; box-sizing: border-box;">
+        <input type="checkbox" class="wa-tagihan-modal-item-cb" value="${escapeHtml(cat)}" ${isChecked ? 'checked' : ''} style="flex-shrink:0; width: 16px; height: 16px;" />
+        <span style="white-space: normal; word-break: break-word;">${escapeHtml(labelText)}</span>
+      </label>
+    `;
+  }).join('');
+
+  if (checkAllEl) {
+    const itemCbs = checklistEl.querySelectorAll('.wa-tagihan-modal-item-cb');
+    checkAllEl.checked = Array.from(itemCbs).every(cb => cb.checked);
+
+    checkAllEl.onchange = function() {
+      const cbs = checklistEl.querySelectorAll('.wa-tagihan-modal-item-cb');
+      cbs.forEach(cb => cb.checked = checkAllEl.checked);
+    };
+  }
+
+  checklistEl.onchange = function(e) {
+    if (e.target && e.target.classList.contains('wa-tagihan-modal-item-cb')) {
+      if (checkAllEl) {
+        const itemCbs = Array.from(checklistEl.querySelectorAll('.wa-tagihan-modal-item-cb'));
+        checkAllEl.checked = itemCbs.every(cb => cb.checked);
+      }
+    }
+  };
+}
+
+function handleConfirmWaTagihanSend() {
+  const checklistEl = document.getElementById('wa-tagihan-modal-checklist');
+  if (!checklistEl) return;
+
+  const checkedCbs = checklistEl.querySelectorAll('.wa-tagihan-modal-item-cb:checked');
+  const selectedCategories = Array.from(checkedCbs).map(cb => cb.value.toUpperCase().trim());
+
+  if (selectedCategories.length === 0) {
+    showToast('⚠️ Pilih minimal 1 target tagihan yang akan dikirim!', 'warning');
+    return;
+  }
+
+  state.selectedWaTagihanCategories = selectedCategories;
+  closeWaTagihanSelectModal();
+  openSendWaConfirmModal();
+}
+
+
 
 function updateWaModalFields() {
   if (!DOM.waSelectTech) return;
@@ -4477,6 +4800,7 @@ function handleWaDirectOpen() {
 // PENCAPAIAN PDS MODULE & CHART RENDERER
 // ==========================================
 function renderPdsTab() {
+  renderSheetUpdateInfo();
   if (!DOM.pdsContentContainer) return;
   const pdsList = state.sheetsData.pdsRows || [];
 

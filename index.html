@@ -16,11 +16,19 @@
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   
-  <!-- App Favicon & Manifest -->
+  <!-- App Favicon -->
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-  <link rel="manifest" href="manifest.json" />
 
   <link rel="stylesheet" href="style.css?v=28.0" />
+  <style>
+    /* Prevent header-btn-install from flickering on sub-pages or disappearing on Menu Utama */
+    #header-btn-install {
+      display: none !important;
+    }
+    html[data-active-tab="tab-menu"] #header-btn-install {
+      display: inline-flex !important;
+    }
+  </style>
   <script>
     window.__INIT_NAMA__ = '';
     window.__INIT_NIK__ = '';
@@ -167,8 +175,8 @@
           <button type="button" id="header-btn-profile" class="header-psw-badge" style="background:rgba(255,255,255,0.22); border:1px solid rgba(255,255,255,0.4); cursor:pointer; padding: 5px 8px;" title="Buka Halaman Akun / Profil">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-cog"><circle cx="18" cy="15" r="3"/><circle cx="9" cy="7" r="4"/><path d="M10 15H6a4 4 0 0 0-4 4v2"/><path d="m21.7 16.4-.9-.3"/><path d="m15.2 13.9-.9-.3"/><path d="m16.4 21.7-.3-.9"/><path d="m13.9 15.2-.3-.9"/><path d="m21.7 13.6-.9.3"/><path d="m15.2 16.1-.9.3"/><path d="m13.9 14.8-.3.9"/><path d="m16.4 8.3-.3.9"/></svg>
           </button>
-          <button type="button" id="header-btn-install" class="header-psw-badge" style="background:linear-gradient(135deg, #10b981, #059669); border:1px solid rgba(255,255,255,0.5); cursor:pointer; padding: 5px 10px; font-weight: 700; gap: 4px; display: inline-flex; align-items: center;" title="Simpan Aplikasi ke Desktop / Layar Utama HP">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> <span>Simpan App</span>
+          <button type="button" id="header-btn-install" class="header-psw-badge" style="display:none; background:linear-gradient(135deg, #10b981, #059669); border:1px solid rgba(255,255,255,0.5); cursor:pointer; padding: 5px 10px; font-weight: 700; gap: 4px; align-items: center;" title="Instal Aplikasi ke Layar Utama HP">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> <span>Instal APK</span>
           </button>
         </div>
       </header>
@@ -285,7 +293,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-clock" style="color:var(--primary);"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Data Case Pending
                 <span class="badge-count" id="pending-tech-count">0 Case</span>
               </div>
-              <button type="button" id="btn-open-wa-pending" onclick="openSendWaConfirmModal()" class="btn btn-xs" style="display:none; font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px; background:#25D366; color:#fff; border:none; cursor:pointer;" title="Kirim WA Ke Teknisi">
+              <button type="button" id="btn-open-wa-pending" onclick="openWaStatusSelectModal()" class="btn btn-xs" style="display:none; font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px; background:#25D366; color:#fff; border:none; cursor:pointer;" title="Kirim WA Ke Teknisi">
                 <i data-lucide="message-square"></i> Kirim WA
               </button>
             </div>
@@ -428,7 +436,7 @@
                 <i data-lucide="banknote"></i> Tagihan Teknisi
                 <span class="badge-count" id="tagihan-count">0 Invoice</span>
               </div>
-              <button type="button" id="btn-open-wa-tagihan" onclick="openSendWaConfirmModal()" class="btn btn-xs" style="display:none; font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px; background:#25D366; color:#fff; border:none; cursor:pointer;" title="Kirim WA Ke Teknisi">
+              <button type="button" id="btn-open-wa-tagihan" onclick="openWaTagihanSelectModal()" class="btn btn-xs" style="display:none; font-size:11px; font-weight:700; gap:4px; padding:4px 8px; border-radius:4px; background:#25D366; color:#fff; border:none; cursor:pointer;" title="Kirim WA Ke Teknisi">
                 <i data-lucide="message-square"></i> Kirim WA
               </button>
             </div>
@@ -926,6 +934,19 @@
             <input type="text" id="wa-target-phone" class="custom-select" placeholder="Contoh: 081234567890 atau 6281234567890" style="width: 100%; font-size: 12px; padding: 6px 8px; border-radius: 4px;" />
           </div>
 
+          <!-- Filter Checklist Status Case Pending -->
+          <div class="form-group mb-0" id="wa-status-filter-container">
+            <div class="flex-between align-center mb-1">
+              <label style="font-size: 11.5px; font-weight: 700; color: var(--text-main);">Pilih Status Case Pending Yang Dikirim:</label>
+              <label style="font-size: 10.5px; color: var(--primary); cursor: pointer; font-weight: 700; display: flex; align-items: center; gap: 4px;">
+                <input type="checkbox" id="wa-check-all-status" checked /> Pilih Semua
+              </label>
+            </div>
+            <div id="wa-status-checklist" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; padding: 6px 8px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; max-height: 90px; overflow-y: auto;">
+              <!-- Dynamic status checkboxes -->
+            </div>
+          </div>
+
           <div class="form-group mb-0">
             <label style="font-size: 11.5px; font-weight: 700; color: var(--text-main);">Preview Pesan WA (Gabungan Pending, Tagihan & Part)</label>
             <textarea id="wa-message-preview" rows="8" class="custom-select" style="width: 100%; font-size: 11px; padding: 8px; border-radius: 4px; font-family: inherit; resize: vertical; min-height: 120px;"></textarea>
@@ -946,33 +967,106 @@
       </div>
     </div>
 
-    <!-- MODAL PANDUAN / PING SIMPAN APP TO DESKTOP / LAYAR HP -->
+    <!-- MODAL SIMPEL CEKLIS STATUS KIRIM WA PENDING -->
+    <div id="modal-wa-status-select" class="modal-overlay" style="z-index: 99999; padding: 2mm;">
+      <div class="modal-card" style="max-width: 400px; width: 100%; border-radius: 4px; background: var(--bg-card); color: var(--text-color); padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+        <div class="modal-header flex-between align-center" style="padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+          <div class="modal-title" style="color: #25D366; font-size: 14px; font-weight: 800; display: flex; align-items: center; gap: 6px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-message-square"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>Pilih Status Case Pending</span>
+          </div>
+        </div>
+        <div class="modal-body" style="padding: 10px 0; font-size: 12.5px; line-height: 1.5; display: flex; flex-direction: column; gap: 10px;">
+          <div class="flex-between align-center">
+            <span style="font-weight: 700; color: var(--text-main);">Pilih Status Yang Dikirim:</span>
+            <label style="font-size: 11px; color: var(--primary); cursor: pointer; font-weight: 700; display: flex; align-items: center; gap: 4px;">
+              <input type="checkbox" id="wa-status-modal-check-all" checked /> Pilih Semua
+            </label>
+          </div>
+
+          <div id="wa-status-modal-checklist" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; padding: 10px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; max-height: 180px; overflow-y: auto;">
+            <!-- Dynamic status checkboxes -->
+          </div>
+
+          <div style="font-size: 11px; color: var(--text-muted); background: rgba(255,255,255,0.04); padding: 8px; border-radius: 4px; border: 1px solid var(--border-color);">
+            💡 Status yang <strong>tidak dicentang</strong> (misal <i>WIP COMP</i>) tidak akan dimasukkan ke pesan WA.
+          </div>
+        </div>
+        <div class="modal-footer flex-between" style="padding-top: 10px; border-top: 1px solid var(--border-color); gap: 8px;">
+          <button type="button" id="btn-cancel-wa-status" class="btn btn-secondary btn-sm" style="flex: 1; border-radius: 4px; font-weight: 700; padding: 9px 12px;">
+            Batal
+          </button>
+          <button type="button" id="btn-confirm-wa-status-send" class="btn btn-success btn-sm" style="flex: 1; border-radius: 4px; font-weight: 800; background: #25D366; color: #fff; border: none; padding: 9px 12px; display: flex; align-items: center; justify-content: center;">
+            KIRIM WA
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL SIMPEL CEKLIS TARGET KIRIM WA TAGIHAN -->
+    <div id="modal-wa-tagihan-select" class="modal-overlay" style="z-index: 99999; padding: 2mm;">
+      <div class="modal-card" style="max-width: 400px; width: 100%; border-radius: 4px; background: var(--bg-card); color: var(--text-color); padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+        <div class="modal-header flex-between align-center" style="padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+          <div class="modal-title" style="color: #25D366; font-size: 14px; font-weight: 800; display: flex; align-items: center; gap: 6px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-banknote"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>
+            <span>Pilih Target Tagihan</span>
+          </div>
+        </div>
+        <div class="modal-body" style="padding: 10px 0; font-size: 12.5px; line-height: 1.5; display: flex; flex-direction: column; gap: 10px;">
+          <div class="flex-between align-center">
+            <span style="font-weight: 700; color: var(--text-main);">Pilih Target Yang Dikirim:</span>
+            <label style="font-size: 11px; color: var(--primary); cursor: pointer; font-weight: 700; display: flex; align-items: center; gap: 4px;">
+              <input type="checkbox" id="wa-tagihan-modal-check-all" checked /> Pilih Semua
+            </label>
+          </div>
+
+          <div id="wa-tagihan-modal-checklist" style="display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 4px; max-height: 220px; overflow-y: auto;">
+            <!-- Dynamic 4 target checkboxes -->
+          </div>
+
+          <div style="font-size: 11px; color: var(--text-muted); background: rgba(255,255,255,0.04); padding: 8px; border-radius: 4px; border: 1px solid var(--border-color);">
+            💡 Target yang <strong>tidak dicentang</strong> (misal <i>DIRECT KONSUMEN</i>) tidak akan dimasukkan ke pesan WA.
+          </div>
+        </div>
+        <div class="modal-footer flex-between" style="padding-top: 10px; border-top: 1px solid var(--border-color); gap: 8px;">
+          <button type="button" id="btn-cancel-wa-tagihan" class="btn btn-secondary btn-sm" style="flex: 1; border-radius: 4px; font-weight: 700; padding: 9px 12px;">
+            Batal
+          </button>
+          <button type="button" id="btn-confirm-wa-tagihan-send" class="btn btn-success btn-sm" style="flex: 1; border-radius: 4px; font-weight: 800; background: #25D366; color: #fff; border: none; padding: 9px 12px; display: flex; align-items: center; justify-content: center;">
+            KIRIM WA
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL PANDUAN SIMPAN APP TO LAYAR HP -->
     <div class="modal-overlay" id="modal-install-guide" style="z-index: 99999;">
-      <div class="modal-card" style="max-width: 440px; text-align: left; border-radius: 12px; background: var(--bg-card); color: var(--text-color);">
+      <div class="modal-card" style="max-width: 440px; text-align: left; border-radius: 4px; background: var(--bg-card); color: var(--text-color);">
         <div class="modal-header flex-between" style="padding-bottom: 10px; border-bottom: 1px solid var(--border-color);">
           <div class="modal-title" style="font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 6px; color: var(--primary);">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-smartphone"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><line x1="12" x2="12.01" y1="18" y2="18"/></svg> <span>Simpan Aplikasi ke Layar Utama / Desktop</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-smartphone"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><line x1="12" x2="12.01" y1="18" y2="18"/></svg> <span>Instal Aplikasi ke Layar HP</span>
           </div>
           <button type="button" class="btn-close-modal" id="btn-close-install-modal" style="background:none; border:none; color:var(--text-muted); font-size: 20px; cursor:pointer;">&times;</button>
         </div>
         <div class="modal-body" style="padding: 16px 0; font-size: 13px; line-height: 1.6;">
-          <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-weight: 600; color: #10b981;">
-            💡 Aplikasi dapat langsung dimuat dari Layar Utama HP / Desktop tanpa ketik link lagi!
+          <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 4px; padding: 10px 12px; margin-bottom: 14px; font-weight: 600; color: #10b981;">
+            💡 Pasang aplikasi langsung ke Layar Utama HP Anda agar bisa dibuka tanpa ketik link lagi!
           </div>
 
-          <p style="margin-bottom: 6px; font-weight: 700; color: var(--text-color);">📲 Pengguna HP (Android & iPhone):</p>
-          <ol style="padding-left: 20px; margin-bottom: 16px; color: var(--text-secondary);">
-            <li>Klik ikon <strong>Titik Tiga</strong> (Chrome Android) atau tombol <strong>Bagikan/Share</strong> (Safari iPhone).</li>
+          <!-- Tombol Instal Otomatis HP -->
+          <div id="pwa-install-container" style="margin-bottom: 12px;">
+            <button type="button" id="btn-pwa-direct-install" class="btn btn-success btn-block btn-md" style="gap: 8px; padding: 12px 14px; font-weight: 800; font-size: 13px; background: linear-gradient(135deg, #10b981, #059669); border: none; width: 100%; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); border-radius: 4px; cursor: pointer;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+              <span>📲 INSTAL APLIKASI DI HP SEKARANG</span>
+            </button>
+          </div>
+
+          <p style="margin-bottom: 4px; font-weight: 700; color: var(--text-color);">📲 Cara Instal Manual di HP (Android & iPhone):</p>
+          <ol style="padding-left: 20px; margin-bottom: 4px; color: var(--text-secondary);">
+            <li>Klik tombol <strong>"Instal Aplikasi Di HP Sekarang"</strong> di atas.</li>
+            <li>Jika tidak muncul, klik menu <strong>Titik Tiga (⋮)</strong> (Chrome Android) / <strong>Bagikan/Share</strong> (Safari iPhone).</li>
             <li>Pilih menu <strong>"Tambahkan ke Layar Utama"</strong> (*Add to Home Screen*) / <strong>"Install Aplikasi"</strong>.</li>
-            <li>Ikon aplikasi <strong>Teknisi Jabar</strong> akan otomatis muncul di Layar HP Anda!</li>
           </ol>
-
-          <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 14px 0;" />
-
-          <p style="margin-bottom: 8px; font-weight: 700; color: var(--text-color);">💻 Pengguna Laptop / PC Windows:</p>
-          <button type="button" id="btn-download-desktop-shortcut" class="btn btn-primary btn-block btn-sm" style="gap: 6px; padding: 10px 14px; font-weight: 700; background: linear-gradient(135deg, #3b82f6, #2563eb); border: none; width: 100%;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-down"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><polyline points="9 15 12 18 15 15"/></svg> <span>Unduh Shortcut (.URL) ke Desktop PC</span>
-          </button>
         </div>
       </div>
     </div>
