@@ -3947,6 +3947,10 @@ function getAdminOrSiteAdminStatus() {
 
 function isTechnicianMatch(sheetTech, targetTech) {
   if (!sheetTech || !targetTech) return false;
+  const sUpper = String(sheetTech).toUpperCase().trim();
+  const tUpper = String(targetTech).toUpperCase().trim();
+  if (sUpper === tUpper) return true;
+
   const sClean = cleanNameString(sheetTech);
   const tClean = cleanNameString(targetTech);
   if (!sClean || !tClean) return false;
@@ -3961,14 +3965,14 @@ function isTechnicianMatch(sheetTech, targetTech) {
       if (sWords.includes(tw)) matchCount++;
     }
     const minRequired = Math.min(sWords.length, tWords.length, 2);
-    return matchCount >= minRequired;
+    if (matchCount >= minRequired) return true;
   }
 
   if (sWords.length === 1 && tWords.length >= 1) {
-    return tWords.includes(sWords[0]);
+    if (tWords.includes(sWords[0])) return true;
   }
   if (tWords.length === 1 && sWords.length >= 1) {
-    return sWords.includes(tWords[0]);
+    if (sWords.includes(tWords[0])) return true;
   }
 
   return false;
@@ -4003,14 +4007,14 @@ const TAGIHAN_CATEGORIES = [
 ];
 
 function buildTechnicianWaMessage(targetTechName, contextTab = '', selectedStatuses = null) {
-  if (!targetTechName) return '';
+  if (!targetTechName) return null;
   const activeTab = contextTab || state.activeTab || 'tab-pending';
 
   const allTechPending = (state.sheetsData.pendingCases || []).filter(item => isTechnicianMatch(item.teknisi, targetTechName));
-  const activeSelectedStatuses = selectedStatuses !== null ? selectedStatuses : getSelectedWaPendingStatuses();
+  const activeSelectedStatuses = selectedStatuses !== null ? selectedStatuses : (state.selectedWaPendingStatuses || null);
 
   let pendingCases = allTechPending;
-  if (activeSelectedStatuses !== null && activeSelectedStatuses.length >= 0) {
+  if (activeSelectedStatuses !== null && Array.isArray(activeSelectedStatuses) && activeSelectedStatuses.length > 0) {
     pendingCases = allTechPending.filter(item => {
       const st = (item.status || 'PENDING').toUpperCase().trim();
       return activeSelectedStatuses.includes(st);
@@ -4020,7 +4024,7 @@ function buildTechnicianWaMessage(targetTechName, contextTab = '', selectedStatu
   const allTechTagihan = (state.sheetsData.tagihanRows || []).filter(item => isTechnicianMatch(item.teknisi, targetTechName));
   let tagihanRows = allTechTagihan;
   const activeSelectedTagihanCats = state.selectedWaTagihanCategories || null;
-  if (activeSelectedTagihanCats !== null && Array.isArray(activeSelectedTagihanCats)) {
+  if (activeSelectedTagihanCats !== null && Array.isArray(activeSelectedTagihanCats) && activeSelectedTagihanCats.length > 0) {
     tagihanRows = allTechTagihan.filter(item => {
       const cat = getTagihanCategory(item.namaKonsumen).toUpperCase().trim();
       return activeSelectedTagihanCats.includes(cat);
@@ -4029,35 +4033,33 @@ function buildTechnicianWaMessage(targetTechName, contextTab = '', selectedStatu
 
   const partBelumKembali = (state.sheetsData.partBelumKembali || []).filter(item => isTechnicianMatch(item.teknisi, targetTechName));
 
+  if (activeTab === 'tab-tagihan') {
+    if (tagihanRows.length === 0) return null;
+  } else if (activeTab === 'tab-part-kembali') {
+    if (partBelumKembali.length === 0) return null;
+  } else if (activeTab === 'tab-pending') {
+    if (pendingCases.length === 0) return null;
+  } else {
+    if (pendingCases.length === 0 && tagihanRows.length === 0 && partBelumKembali.length === 0) return null;
+  }
+
   let msg = `Halo *${targetTechName}*,\n\n`;
 
   if (activeTab === 'tab-tagihan') {
-    msg += `Berikut rincian *TAGIHAN INVOICE* Anda:\n`;
-    if (tagihanRows.length > 0) {
-      tagihanRows.forEach((item, idx) => {
-        msg += `${idx + 1}. Inv: *${item.noInvoice || '-'}* | Cust: ${item.namaKonsumen || '-'} | Nominal: ${formatRupiah(item.jumlah)}\n`;
-      });
-    } else {
-      msg += `Saat ini tidak ada tagihan terdaftar atas nama Anda.\n`;
-    }
+    msg += `Berikut rincian *TAGIHAN INVOICE* Anda (${tagihanRows.length} Invoice):\n`;
+    tagihanRows.forEach((item, idx) => {
+      msg += `${idx + 1}. Inv: *${item.noInvoice || '-'}* | Cust: ${item.namaKonsumen || '-'} | Nominal: ${formatRupiah(item.jumlah)}\n`;
+    });
   } else if (activeTab === 'tab-part-kembali') {
-    msg += `Berikut rincian *PART BEKAS / BELUM KEMBALI* Anda:\n`;
-    if (partBelumKembali.length > 0) {
-      partBelumKembali.forEach((item, idx) => {
-        msg += `${idx + 1}. Part: *${item.noGudang || '-'}* | Qty: ${item.qty || '1'} | RSV: ${item.noReservasi || '-'}\n`;
-      });
-    } else {
-      msg += `Saat ini tidak ada part bekas terdaftar atas nama Anda.\n`;
-    }
+    msg += `Berikut rincian *PART BEKAS / BELUM KEMBALI* Anda (${partBelumKembali.length} Item):\n`;
+    partBelumKembali.forEach((item, idx) => {
+      msg += `${idx + 1}. Part: *${item.noGudang || '-'}* | Qty: ${item.qty || '1'} | RSV: ${item.noReservasi || '-'}\n`;
+    });
   } else if (activeTab === 'tab-pending') {
-    msg += `Berikut rincian *CASE PENDING* Anda:\n`;
-    if (pendingCases.length > 0) {
-      pendingCases.forEach((item, idx) => {
-        msg += `${idx + 1}. Case: *${item.no_case || '-'}* | Type: ${item.type || '-'} | Seri: ${item.seri || '-'} | SCL: ${item.scl || '-'} | Status: ${item.status || '-'}\n`;
-      });
-    } else {
-      msg += `Saat ini tidak ada case pending terdaftar atas nama Anda.\n`;
-    }
+    msg += `Berikut rincian *CASE PENDING* Anda (${pendingCases.length} Case):\n`;
+    pendingCases.forEach((item, idx) => {
+      msg += `${idx + 1}. Case: *${item.no_case || '-'}* | Type: ${item.type || '-'} | Seri: ${item.seri || '-'} | SCL: ${item.scl || '-'} | Status: ${item.status || '-'}\n`;
+    });
   } else {
     msg += `Berikut ringkasan tugas & tagihan Anda:\n`;
     if (pendingCases.length > 0) {
@@ -4155,19 +4157,14 @@ function openSendWaConfirmModal() {
     siteTechList = techList.filter(tName => isTechInSite(tName, userSite));
   }
 
-  // Ensure each tech in siteTechList really has active items (>0) in THIS tab
+  // Ensure each tech in siteTechList really has active items (>0) in THIS tab (matching active filters)
   siteTechList = siteTechList.filter(tName => {
-    if (activeTab === 'tab-tagihan') {
-      return (state.sheetsData.tagihanRows || []).filter(i => isTechnicianMatch(i.teknisi, tName)).length > 0;
-    } else if (activeTab === 'tab-part-kembali') {
-      return (state.sheetsData.partBelumKembali || []).filter(i => isTechnicianMatch(i.teknisi, tName)).length > 0;
-    } else {
-      return (state.sheetsData.pendingCases || []).filter(i => isTechnicianMatch(i.teknisi, tName)).length > 0;
-    }
+    const msg = buildTechnicianWaMessage(tName, activeTab);
+    return msg !== null && msg !== '';
   });
 
   if (siteTechList.length === 0) {
-    showToast(`⚠️ Tidak ada teknisi yang memiliki data ${menuLabel} di site ini.`, 'info');
+    showToast(`⚠️ Tidak ada data ${menuLabel} yang memenuhi kriteria filter untuk dikirim via WA.`, 'info');
     return;
   }
 
@@ -4175,8 +4172,6 @@ function openSendWaConfirmModal() {
   state.targetSiteName = (!isGlobalAdmin && userSite && userSite !== 'JABAR') ? userSite : 'ALL';
   state.targetWaContextTab = activeTab;
   state.modalAction = 'sendWaBatch';
-
-  const techNamesStr = siteTechList.length <= 3 ? ` (${siteTechList.join(', ')})` : '';
 
   if (DOM.modalConfirmTitle) DOM.modalConfirmTitle.innerHTML = `<i data-lucide="message-square"></i> Konfirmasi Kirim WA ${menuLabel}`;
   if (DOM.modalConfirmMsg) DOM.modalConfirmMsg.textContent = `Apakah Anda Yakin Ingin Mengirimkan Pesan WhatsApp ${menuLabel}?`;
@@ -4215,16 +4210,10 @@ async function executeSendWaBatch() {
   for (let i = 0; i < techList.length; i++) {
     const techName = techList[i];
 
-    // Filter check based on contextTab
-    if (contextTab === 'tab-tagihan') {
-      const tCount = (state.sheetsData.tagihanRows || []).filter(item => isTechnicianMatch(item.teknisi, techName)).length;
-      if (tCount === 0) continue;
-    } else if (contextTab === 'tab-part-kembali') {
-      const pbCount = (state.sheetsData.partBelumKembali || []).filter(item => isTechnicianMatch(item.teknisi, techName)).length;
-      if (pbCount === 0) continue;
-    } else if (contextTab === 'tab-pending') {
-      const pCount = (state.sheetsData.pendingCases || []).filter(item => isTechnicianMatch(item.teknisi, techName)).length;
-      if (pCount === 0) continue;
+    const msg = buildTechnicianWaMessage(techName, contextTab);
+    if (!msg) {
+      showToast(`ℹ️ [${i + 1}/${techList.length}] ${techName}: Tidak ada data untuk dikirim, dilewati.`, 'info');
+      continue;
     }
 
     let phone = '';
@@ -4244,12 +4233,6 @@ async function executeSendWaBatch() {
 
     if (!phone) {
       showToast(`⚠️ [${i + 1}/${techList.length}] ${techName}: Nomor HP/WA tidak ditemukan di Sheet user (Kolom E)`, 'warning');
-      failCount++;
-      continue;
-    }
-
-    const msg = buildTechnicianWaMessage(techName, contextTab);
-    if (!msg) {
       failCount++;
       continue;
     }
