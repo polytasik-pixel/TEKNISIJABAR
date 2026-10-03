@@ -1,27 +1,41 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="techBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#1e3a8a" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+    <linearGradient id="helmetGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <linearGradient id="badgeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#10b981" />
       <stop offset="100%" stop-color="#059669" />
     </linearGradient>
   </defs>
 
-  <!-- Rounded Background -->
-  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bgGrad)" />
+  <!-- Background Container -->
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#techBg)" />
+  <rect x="3" y="3" width="58" height="58" rx="13" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.2" />
 
-  <!-- Scanner Frame Corner Brackets -->
-  <path d="M14 21 V16 H19" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.9" />
-  <path d="M45 16 H50 V21" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.9" />
-  <path d="M14 43 V48 H19" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.9" />
-  <path d="M45 48 H50 V43" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.9" />
+  <!-- Technician Body / Uniform -->
+  <path d="M14 54 C14 43 21 40 32 40 C43 40 50 43 50 54 Z" fill="#ffffff" />
+  <path d="M26 40 L32 46 L38 40" fill="none" stroke="#1e3a8a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
 
-  <!-- Package / Part Box Icon -->
-  <g fill="none" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M32 20 L43 26 L32 32 L21 26 Z" fill="#ffffff" fill-opacity="0.25" />
-    <path d="M21 26 V37 L32 43 V32 Z" />
-    <path d="M43 26 V37 L32 43" />
+  <!-- Head / Face -->
+  <ellipse cx="32" cy="32" rx="8.5" ry="9" fill="#fed7aa" />
+
+  <!-- Safety Helmet / Hardhat -->
+  <path d="M19 26 C19 16 24 13 32 13 C40 13 45 16 45 26 Z" fill="url(#helmetGrad)" stroke="#ffffff" stroke-width="1.5" />
+  <!-- Helmet Brim -->
+  <path d="M16 27 C16 27 23 29.5 32 29.5 C41 29.5 48 27 48 27 L46 24.5 C46 24.5 39 26.5 32 26.5 C25 26.5 18 24.5 18 24.5 Z" fill="#f59e0b" stroke="#ffffff" stroke-width="1" />
+  <!-- Helmet Center Crest -->
+  <path d="M32 13 V25.5" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0.9" />
+
+  <!-- Green Service Check Badge in Top Right -->
+  <g transform="translate(42, 8) scale(0.7)">
+    <circle cx="12" cy="12" r="11" fill="url(#badgeGrad)" stroke="#ffffff" stroke-width="2" />
+    <path d="M7 12 L10.5 15.5 L17 8.5" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" fill="none" />
   </g>
-
-  <!-- Bright Orange Laser Scan Beam -->
-  <line x1="11" y1="32" x2="53" y2="32" stroke="#f59e0b" stroke-width="3" stroke-linecap="round" />
 </svg>
